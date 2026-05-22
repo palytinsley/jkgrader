@@ -76,6 +76,11 @@ const CONFIG = {
     UNGRADED: 'Ungraded',
     IN_PROGRESS: 'In Progress',
     COMPLETE: 'Complete'
+  },
+  CACHE: {
+    RUBRIC_CONFIG: 'jkRubricConfig',
+    ROSTER: 'jkRoster',
+    TTL_SECONDS: 3600
   }
 };
 
@@ -333,12 +338,15 @@ function setupSheets_() {
     }
     return { sheet: spec.name, action: 'left existing headers' };
   });
+  const cache = CacheService.getScriptCache();
+  cache.remove(CONFIG.CACHE.RUBRIC_CONFIG);
+  cache.remove(CONFIG.CACHE.ROSTER);
   return { ok: true, results };
 }
 
 function readWorkbook_() {
   const ss = getSpreadsheet_();
-  const roster = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.ROSTER));
+  const roster = getCachedRoster_(ss);
   const groupGrades = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.GROUP_GRADES));
   const individualGrades = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.INDIVIDUAL));
   const showNight = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.SHOW_NIGHT));
@@ -446,6 +454,9 @@ function findPeerForStudent_(responses, student) {
 }
 
 function getRubricConfig_() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(CONFIG.CACHE.RUBRIC_CONFIG);
+  if (cached) return JSON.parse(cached);
   const rows = tabToObjects_(getRequiredSheet_(getSpreadsheet_(), CONFIG.SHEETS.RUBRIC_CONFIG));
   const rubric = {};
   let lastCategory = '';
@@ -466,7 +477,25 @@ function getRubricConfig_() {
     const text = stringOrBlank_(row[CONFIG.RUBRIC_HEADERS.CRITERION_TEXT]);
     if (label || text) rubric[category].criteria.push({ label, text });
   });
+  try {
+    cache.put(CONFIG.CACHE.RUBRIC_CONFIG, JSON.stringify(rubric), CONFIG.CACHE.TTL_SECONDS);
+  } catch (err) {
+    Logger.log('CacheService put failed for %s: %s', CONFIG.CACHE.RUBRIC_CONFIG, err && err.message ? err.message : err);
+  }
   return rubric;
+}
+
+function getCachedRoster_(ss) {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(CONFIG.CACHE.ROSTER);
+  if (cached) return JSON.parse(cached);
+  const rows = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.ROSTER));
+  try {
+    cache.put(CONFIG.CACHE.ROSTER, JSON.stringify(rows), CONFIG.CACHE.TTL_SECONDS);
+  } catch (err) {
+    Logger.log('CacheService put failed for %s: %s', CONFIG.CACHE.ROSTER, err && err.message ? err.message : err);
+  }
+  return rows;
 }
 
 function computeRollupRows_() {
@@ -726,7 +755,7 @@ function buildTargetedGroupResponse_(ss, groupKey, options) {
   const country = parts.slice(1).join('|');
   if (!period || !country) throw new Error('Missing groupKey.');
 
-  const rosterRows = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.ROSTER)).filter(row => {
+  const rosterRows = getCachedRoster_(ss).filter(row => {
     return String(cleanPeriod_(row[CONFIG.ROSTER_HEADERS.PERIOD])) === String(period) &&
       sameText_(row[CONFIG.ROSTER_HEADERS.COUNTRY], country);
   });
