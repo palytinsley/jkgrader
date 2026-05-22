@@ -200,7 +200,7 @@ function saveGroupGrades_(payload) {
     mergeRowValue_(rowValues, headerMap, 'GroupStatus', status);
     mergeRowValue_(rowValues, headerMap, 'LastSavedAt', savedAt);
     sheet.getRange(rowNumber, 1, 1, headers.length).setValues([rowValues]);
-    return { ok: true, savedAt, group: buildTargetedGroupResponse_(ss, groupKey).group };
+    return { ok: true, savedAt, group: buildTargetedGroupResponse_(ss, groupKey, { light: true }).group };
   } catch (err) {
     logError_('saveGroupGrades_', err, payload);
     return errorResponse_(err);
@@ -251,7 +251,7 @@ function saveIndividualGrades_(payload) {
     const country = String(payload.Country || updated.Country || '').trim();
     const rosterStudents = studentsForGroup_(tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.ROSTER)), period, country);
     updateStoredGroupStatus_(period, country, ss, rosterStudents);
-    return { ok: true, savedAt, group: buildTargetedGroupResponse_(ss, `${period}|${country}`).group };
+    return { ok: true, savedAt, group: buildTargetedGroupResponse_(ss, `${period}|${country}`, { light: true }).group };
   } catch (err) {
     logError_('saveIndividualGrades_', err, payload);
     return errorResponse_(err);
@@ -726,12 +726,11 @@ function readIndividualRowsForStudents_(ss, students) {
   const emailCol = headerMap.Email;
   const lastRow = sheet.getLastRow();
   if (lastRow <= 1) return [];
-  const emailValues = sheet.getRange(2, emailCol, lastRow - 1, 1).getValues();
-  const rows = [];
-  emailValues.forEach((row, i) => {
-    if (emails[String(row[0] || '').trim().toLowerCase()]) rows.push(i + 2);
-  });
-  return rows.map(rowNumber => rowArrayToObject_(headers, sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0]));
+  const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+  return values.reduce((rows, row) => {
+    if (emails[String(row[emailCol - 1] || '').trim().toLowerCase()]) rows.push(rowArrayToObject_(headers, row));
+    return rows;
+  }, []);
 }
 
 function findExistingRowByHeader_(sheet, headerMap, header, value) {
@@ -747,7 +746,9 @@ function findExistingRowByHeader_(sheet, headerMap, header, value) {
   return null;
 }
 
-function buildTargetedGroupResponse_(ss, groupKey) {
+function buildTargetedGroupResponse_(ss, groupKey, options) {
+  options = options || {};
+  const light = options.light === true;
   const parts = String(groupKey || '').split('|');
   const period = cleanPeriod_(parts[0]);
   const country = parts.slice(1).join('|');
@@ -785,27 +786,35 @@ function buildTargetedGroupResponse_(ss, groupKey) {
   students.forEach(student => student.individualGrades = individualByEmail[student.email] || {});
   students.sort((a, b) => String(a.lastName).localeCompare(String(b.lastName)) || String(a.preferredFirst).localeCompare(String(b.preferredFirst)));
 
-  const reflections = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.REFLECTIONS));
-  students.forEach(student => {
-    student.reflection = reflections.find(item => String(item.Email || '').toLowerCase() === student.email.toLowerCase()) || null;
-  });
-  const peerResponses = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.PEER_GRADES)).filter(row => {
-    return cleanPeriod_(row[CONFIG.PEER_HEADERS.PERIOD]) === String(period) && sameText_(row[CONFIG.PEER_HEADERS.COUNTRY], country);
-  });
+  let peerResponses = [];
+  let showNightData = null;
+  if (!light) {
+    const reflections = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.REFLECTIONS));
+    students.forEach(student => {
+      student.reflection = reflections.find(item => String(item.Email || '').toLowerCase() === student.email.toLowerCase()) || null;
+    });
+    peerResponses = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.PEER_GRADES)).filter(row => {
+      return cleanPeriod_(row[CONFIG.PEER_HEADERS.PERIOD]) === String(period) && sameText_(row[CONFIG.PEER_HEADERS.COUNTRY], country);
+    });
+    showNightData = findShowNight_(tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.SHOW_NIGHT)), period, country);
+  }
   const group = {
     groupKey,
     period,
     country,
     students,
     groupGrades,
-    showNightData: findShowNight_(tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.SHOW_NIGHT)), period, country),
+    reflections: light ? null : undefined,
+    showNightData,
     peerResponses,
     status: computeGroupStatus_(groupKey, groupGrades, individualByEmail, students),
     studentPeerData: {}
   };
-  students.forEach(student => {
-    group.studentPeerData[student.email] = findPeerForStudent_(peerResponses, student);
-  });
+  if (!light) {
+    students.forEach(student => {
+      group.studentPeerData[student.email] = findPeerForStudent_(peerResponses, student);
+    });
+  }
   return { ok: true, group };
 }
 
