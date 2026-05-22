@@ -1,3 +1,4 @@
+// JK Grader Apps Script backend.
 const CONFIG = {
   SPREADSHEET_ID: '1_xOjYXh_PQzXERVyp-k_lyge9jAxiWTPAedS6lOdl0c',
   SHEETS: {
