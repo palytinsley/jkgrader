@@ -190,14 +190,7 @@ function saveGroupGrades_(payload) {
     ['GroupWorkScore', 'GroupWorkComment', 'OutfitQualityScore', 'OutfitQualityComment', 'MetaphorScore', 'MetaphorComment'].forEach(header => {
       if (Object.prototype.hasOwnProperty.call(payload, header)) mergeRowValue_(rowValues, headerMap, header, payload[header]);
     });
-    const rosterRows = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.ROSTER));
-    const rosterStudents = studentsForGroup_(rosterRows, period, country);
-    const individualRows = readIndividualRowsForStudents_(ss, rosterStudents);
-    const individualByEmail = indexBy_(individualRows, 'Email');
-    const groupRow = rowArrayToObject_(headers, rowValues);
-    const status = computeGroupStatus_(groupKey, groupRow, individualByEmail, rosterStudents);
     const savedAt = new Date().toISOString();
-    mergeRowValue_(rowValues, headerMap, 'GroupStatus', status);
     mergeRowValue_(rowValues, headerMap, 'LastSavedAt', savedAt);
     sheet.getRange(rowNumber, 1, 1, headers.length).setValues([rowValues]);
     return { ok: true, savedAt, group: buildTargetedGroupResponse_(ss, groupKey, { light: true }).group };
@@ -249,8 +242,6 @@ function saveIndividualGrades_(payload) {
     sheet.getRange(rowNumber, 1, 1, headers.length).setValues([rowValues]);
     const period = String(payload.Period || updated.Period || '').trim();
     const country = String(payload.Country || updated.Country || '').trim();
-    const rosterStudents = studentsForGroup_(tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.ROSTER)), period, country);
-    updateStoredGroupStatus_(period, country, ss, rosterStudents);
     return { ok: true, savedAt, group: buildTargetedGroupResponse_(ss, `${period}|${country}`, { light: true }).group };
   } catch (err) {
     logError_('saveIndividualGrades_', err, payload);
@@ -409,25 +400,6 @@ function studentsForGroup_(rosterRows, period, country) {
     return String(cleanPeriod_(row[CONFIG.ROSTER_HEADERS.PERIOD])) === String(period) &&
       sameText_(row[CONFIG.ROSTER_HEADERS.COUNTRY], country);
   }).map(row => ({ email: stringOrBlank_(row[CONFIG.ROSTER_HEADERS.EMAIL]) })).filter(student => student.email);
-}
-
-function updateStoredGroupStatus_(period, country, ss, rosterStudents) {
-  if (!period || !country) return;
-  ss = ss || getSpreadsheet_();
-  const groupSheet = getRequiredSheet_(ss, CONFIG.SHEETS.GROUP_GRADES);
-  requireHeaders_(groupSheet, CONFIG.GROUP_GRADE_HEADERS);
-  const groupKey = `${cleanPeriod_(period)}|${country}`;
-  const groupRows = tabToObjects_(groupSheet);
-  const groupRow = indexBy_(groupRows, 'GroupKey')[groupKey];
-  if (!groupRow) return;
-  const rowNumber = findOrCreateRow_(groupSheet, 'GroupKey', groupKey);
-  const headerMap = getHeaderMap_(groupSheet);
-  const headers = Object.keys(headerMap).sort((a, b) => headerMap[a] - headerMap[b]);
-  const rowValues = groupSheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
-  const students = rosterStudents || [];
-  const individualByEmail = indexBy_(readIndividualRowsForStudents_(ss, students), 'Email');
-  mergeRowValue_(rowValues, headerMap, 'GroupStatus', computeGroupStatus_(groupKey, groupRow, individualByEmail, students));
-  groupSheet.getRange(rowNumber, 1, 1, headers.length).setValues([rowValues]);
 }
 
 function findShowNight_(rows, period, country) {
@@ -785,6 +757,13 @@ function buildTargetedGroupResponse_(ss, groupKey, options) {
   const individualByEmail = indexBy_(readIndividualRowsForStudents_(ss, students), 'Email');
   students.forEach(student => student.individualGrades = individualByEmail[student.email] || {});
   students.sort((a, b) => String(a.lastName).localeCompare(String(b.lastName)) || String(a.preferredFirst).localeCompare(String(b.preferredFirst)));
+  const status = computeGroupStatus_(groupKey, groupGrades, individualByEmail, students);
+  if (groupRowNumber && groupGrades && groupGrades.GroupStatus !== status) {
+    const rowValues = groupSheet.getRange(groupRowNumber, 1, 1, groupHeaders.length).getValues()[0];
+    mergeRowValue_(rowValues, groupHeaderMap, 'GroupStatus', status);
+    groupSheet.getRange(groupRowNumber, 1, 1, groupHeaders.length).setValues([rowValues]);
+    groupGrades.GroupStatus = status;
+  }
 
   let peerResponses = [];
   let showNightData = null;
@@ -807,7 +786,7 @@ function buildTargetedGroupResponse_(ss, groupKey, options) {
     reflections: light ? null : undefined,
     showNightData,
     peerResponses,
-    status: computeGroupStatus_(groupKey, groupGrades, individualByEmail, students),
+    status,
     studentPeerData: {}
   };
   if (!light) {
