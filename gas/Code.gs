@@ -212,6 +212,15 @@ function saveIndividualGrades_(payload) {
     requireHeaders_(sheet, CONFIG.INDIVIDUAL_HEADERS);
     const rowNumber = findOrCreateRow_(sheet, 'Email', email);
     const headerMap = getHeaderMap_(sheet);
+    const overrideFields = ['GroupWorkOverride', 'GroupWorkOverrideNote', 'OutfitQualityOverride', 'OutfitQualityOverrideNote', 'MetaphorOverride', 'MetaphorOverrideNote']
+      .filter(header => Object.prototype.hasOwnProperty.call(payload, header));
+    Logger.log('saveIndividualGrades_ write email=%s StudentName=%s Period=%s Country=%s overrideFields=%s rowNumber=%s',
+      payload.email,
+      payload.StudentName,
+      payload.Period,
+      payload.Country,
+      JSON.stringify(overrideFields),
+      rowNumber);
     setCellByHeader_(sheet, headerMap, rowNumber, 'Email', email);
     ['StudentName', 'Period', 'Country', 'EffortScore', 'EffortComment', 'ProfessionalismScore',
      'ProfessionalismComment', 'ShowNightRole', 'ExtraCreditScore', 'ExtraCreditNote',
