@@ -624,14 +624,14 @@ function findOrCreateRow_(sheet, keyCol, keyVal) {
   const map = getHeaderMap_(sheet);
   const col = map[keyCol];
   if (!col) throw new Error(`Missing key column ${keyCol} in ${sheet.getName()}.`);
-  const lastRow = Math.max(sheet.getLastRow(), 1);
+  const lastRow = sheet.getLastRow();
   if (lastRow > 1) {
     const values = sheet.getRange(2, col, lastRow - 1, 1).getValues();
     for (let i = 0; i < values.length; i++) {
       if (String(values[i][0]).trim().toLowerCase() === String(keyVal).trim().toLowerCase()) return i + 2;
     }
   }
-  const row = sheet.getLastRow() + 1;
+  const row = lastRow + 1;
   sheet.getRange(row, col).setValue(keyVal);
   return row;
 }
