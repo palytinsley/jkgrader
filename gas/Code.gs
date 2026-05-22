@@ -210,17 +210,19 @@ function saveIndividualGrades_(payload) {
     const ss = getSpreadsheet_();
     const sheet = getRequiredSheet_(ss, CONFIG.SHEETS.INDIVIDUAL);
     requireHeaders_(sheet, CONFIG.INDIVIDUAL_HEADERS);
-    const rowNumber = findOrCreateRow_(sheet, 'Email', email);
     const headerMap = getHeaderMap_(sheet);
+    const rowNumber = findSingleExactRow_(sheet, headerMap, 'Email', email);
+    const rowEmail = String(sheet.getRange(rowNumber, headerMap.Email).getValue() || '').trim();
     const overrideFields = ['GroupWorkOverride', 'GroupWorkOverrideNote', 'OutfitQualityOverride', 'OutfitQualityOverrideNote', 'MetaphorOverride', 'MetaphorOverrideNote']
       .filter(header => Object.prototype.hasOwnProperty.call(payload, header));
-    Logger.log('saveIndividualGrades_ write email=%s StudentName=%s Period=%s Country=%s overrideFields=%s rowNumber=%s',
+    Logger.log('saveIndividualGrades_ incoming payload.email=%s StudentName=%s Period=%s Country=%s overrideFieldsPresent=%s matchedRowIndex=%s rowEmailBeingWritten=%s',
       payload.email,
       payload.StudentName,
       payload.Period,
       payload.Country,
       JSON.stringify(overrideFields),
-      rowNumber);
+      rowNumber,
+      rowEmail);
     setCellByHeader_(sheet, headerMap, rowNumber, 'Email', email);
     ['StudentName', 'Period', 'Country', 'EffortScore', 'EffortComment', 'ProfessionalismScore',
      'ProfessionalismComment', 'ShowNightRole', 'ExtraCreditScore', 'ExtraCreditNote',
@@ -643,6 +645,24 @@ function findOrCreateRow_(sheet, keyCol, keyVal) {
   const row = lastRow + 1;
   sheet.getRange(row, col).setValue(keyVal);
   return row;
+}
+
+function findSingleExactRow_(sheet, headerMap, keyCol, keyVal) {
+  const col = headerMap[keyCol];
+  if (!col) throw new Error(`Missing key column ${keyCol} in ${sheet.getName()}.`);
+  const exactValue = String(keyVal || '').trim();
+  const matches = [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    const values = sheet.getRange(2, col, lastRow - 1, 1).getValues();
+    for (let i = 0; i < values.length; i++) {
+      if (String(values[i][0] || '').trim() === exactValue) matches.push(i + 2);
+    }
+  }
+  if (matches.length !== 1) {
+    throw new Error(`Expected exactly one ${sheet.getName()} row with ${keyCol}="${exactValue}", found ${matches.length}.`);
+  }
+  return matches[0];
 }
 
 function setCellByHeader_(sheet, headerMap, rowNumber, header, value) {
