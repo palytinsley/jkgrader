@@ -180,20 +180,27 @@ function saveGroupGrades_(payload) {
     requireHeaders_(sheet, CONFIG.GROUP_GRADE_HEADERS);
     const rowNumber = findOrCreateRow_(sheet, 'GroupKey', groupKey);
     const headerMap = getHeaderMap_(sheet);
+    const headers = Object.keys(headerMap).sort((a, b) => headerMap[a] - headerMap[b]);
+    const rowValues = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
     const period = payload.period || groupKey.split('|')[0];
     const country = payload.country || groupKey.split('|').slice(1).join('|');
-    setCellByHeader_(sheet, headerMap, rowNumber, 'GroupKey', groupKey);
-    setCellByHeader_(sheet, headerMap, rowNumber, 'Period', period);
-    setCellByHeader_(sheet, headerMap, rowNumber, 'Country', country);
+    mergeRowValue_(rowValues, headerMap, 'GroupKey', groupKey);
+    mergeRowValue_(rowValues, headerMap, 'Period', period);
+    mergeRowValue_(rowValues, headerMap, 'Country', country);
     ['GroupWorkScore', 'GroupWorkComment', 'OutfitQualityScore', 'OutfitQualityComment', 'MetaphorScore', 'MetaphorComment'].forEach(header => {
-      if (Object.prototype.hasOwnProperty.call(payload, header)) setCellByHeader_(sheet, headerMap, rowNumber, header, payload[header]);
+      if (Object.prototype.hasOwnProperty.call(payload, header)) mergeRowValue_(rowValues, headerMap, header, payload[header]);
     });
-    const allRows = readWorkbook_();
-    const rosterStudents = studentsForGroup_(allRows.roster, period, country);
-    const status = computeGroupStatus_(groupKey, objectFromRow_(sheet, rowNumber), allRows.individualByEmail, rosterStudents);
-    setCellByHeader_(sheet, headerMap, rowNumber, 'GroupStatus', status);
-    setCellByHeader_(sheet, headerMap, rowNumber, 'LastSavedAt', new Date().toISOString());
-    return { ok: true, savedAt: new Date().toISOString(), group: getGroupDetails_({ groupKey }).group };
+    const rosterRows = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.ROSTER));
+    const rosterStudents = studentsForGroup_(rosterRows, period, country);
+    const individualRows = readIndividualRowsForStudents_(ss, rosterStudents);
+    const individualByEmail = indexBy_(individualRows, 'Email');
+    const groupRow = rowArrayToObject_(headers, rowValues);
+    const status = computeGroupStatus_(groupKey, groupRow, individualByEmail, rosterStudents);
+    const savedAt = new Date().toISOString();
+    mergeRowValue_(rowValues, headerMap, 'GroupStatus', status);
+    mergeRowValue_(rowValues, headerMap, 'LastSavedAt', savedAt);
+    sheet.getRange(rowNumber, 1, 1, headers.length).setValues([rowValues]);
+    return { ok: true, savedAt, group: buildTargetedGroupResponse_(ss, groupKey).group };
   } catch (err) {
     logError_('saveGroupGrades_', err, payload);
     return errorResponse_(err);
@@ -213,7 +220,9 @@ function saveIndividualGrades_(payload) {
     requireHeaders_(sheet, CONFIG.INDIVIDUAL_HEADERS);
     const headerMap = getHeaderMap_(sheet);
     const rowNumber = findSingleExactRow_(sheet, headerMap, 'Email', email);
-    const rowEmail = String(sheet.getRange(rowNumber, headerMap.Email).getValue() || '').trim();
+    const headers = Object.keys(headerMap).sort((a, b) => headerMap[a] - headerMap[b]);
+    const rowValues = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
+    const rowEmail = String(rowValues[headerMap.Email - 1] || '').trim();
     const overrideFields = ['GroupWorkOverride', 'GroupWorkOverrideNote', 'OutfitQualityOverride', 'OutfitQualityOverrideNote', 'MetaphorOverride', 'MetaphorOverrideNote']
       .filter(header => Object.prototype.hasOwnProperty.call(payload, header));
     Logger.log('saveIndividualGrades_ incoming payload.email=%s StudentName=%s Period=%s Country=%s overrideFieldsPresent=%s matchedRowIndex=%s rowEmailBeingWritten=%s',
@@ -224,20 +233,25 @@ function saveIndividualGrades_(payload) {
       JSON.stringify(overrideFields),
       rowNumber,
       rowEmail);
-    setCellByHeader_(sheet, headerMap, rowNumber, 'Email', email);
+    mergeRowValue_(rowValues, headerMap, 'Email', email);
     ['StudentName', 'Period', 'Country', 'EffortScore', 'EffortComment', 'ProfessionalismScore',
      'ProfessionalismComment', 'ShowNightRole', 'ExtraCreditScore', 'ExtraCreditNote',
      'GroupWorkOverride', 'GroupWorkOverrideNote', 'OutfitQualityOverride', 'OutfitQualityOverrideNote',
      'MetaphorOverride', 'MetaphorOverrideNote',
      'ManualScoreOverride', 'ManualScoreOverrideNote',
      'EmailSent', 'EmailSentAt'].forEach(header => {
-      if (Object.prototype.hasOwnProperty.call(payload, header)) setCellByHeader_(sheet, headerMap, rowNumber, header, payload[header]);
+      if (Object.prototype.hasOwnProperty.call(payload, header)) mergeRowValue_(rowValues, headerMap, header, payload[header]);
     });
-    const updated = objectFromRow_(sheet, rowNumber);
-    setCellByHeader_(sheet, headerMap, rowNumber, 'IndividualStatus', computeIndividualStatus_(updated));
-    setCellByHeader_(sheet, headerMap, rowNumber, 'LastSavedAt', new Date().toISOString());
-    updateStoredGroupStatus_(String(payload.Period || updated.Period || '').trim(), String(payload.Country || updated.Country || '').trim());
-    return { ok: true, savedAt: new Date().toISOString(), group: getGroupDetails_({ groupKey: `${payload.Period || updated.Period}|${payload.Country || updated.Country}` }).group };
+    const updated = rowArrayToObject_(headers, rowValues);
+    const savedAt = new Date().toISOString();
+    mergeRowValue_(rowValues, headerMap, 'IndividualStatus', computeIndividualStatus_(updated));
+    mergeRowValue_(rowValues, headerMap, 'LastSavedAt', savedAt);
+    sheet.getRange(rowNumber, 1, 1, headers.length).setValues([rowValues]);
+    const period = String(payload.Period || updated.Period || '').trim();
+    const country = String(payload.Country || updated.Country || '').trim();
+    const rosterStudents = studentsForGroup_(tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.ROSTER)), period, country);
+    updateStoredGroupStatus_(period, country, ss, rosterStudents);
+    return { ok: true, savedAt, group: buildTargetedGroupResponse_(ss, `${period}|${country}`).group };
   } catch (err) {
     logError_('saveIndividualGrades_', err, payload);
     return errorResponse_(err);
@@ -397,19 +411,23 @@ function studentsForGroup_(rosterRows, period, country) {
   }).map(row => ({ email: stringOrBlank_(row[CONFIG.ROSTER_HEADERS.EMAIL]) })).filter(student => student.email);
 }
 
-function updateStoredGroupStatus_(period, country) {
+function updateStoredGroupStatus_(period, country, ss, rosterStudents) {
   if (!period || !country) return;
-  const ss = getSpreadsheet_();
+  ss = ss || getSpreadsheet_();
   const groupSheet = getRequiredSheet_(ss, CONFIG.SHEETS.GROUP_GRADES);
   requireHeaders_(groupSheet, CONFIG.GROUP_GRADE_HEADERS);
   const groupKey = `${cleanPeriod_(period)}|${country}`;
-  const data = readWorkbook_();
-  const groupRow = data.groupByKey[groupKey];
+  const groupRows = tabToObjects_(groupSheet);
+  const groupRow = indexBy_(groupRows, 'GroupKey')[groupKey];
   if (!groupRow) return;
   const rowNumber = findOrCreateRow_(groupSheet, 'GroupKey', groupKey);
   const headerMap = getHeaderMap_(groupSheet);
-  const rosterStudents = studentsForGroup_(data.roster, cleanPeriod_(period), country);
-  setCellByHeader_(groupSheet, headerMap, rowNumber, 'GroupStatus', computeGroupStatus_(groupKey, groupRow, data.individualByEmail, rosterStudents));
+  const headers = Object.keys(headerMap).sort((a, b) => headerMap[a] - headerMap[b]);
+  const rowValues = groupSheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
+  const students = rosterStudents || [];
+  const individualByEmail = indexBy_(readIndividualRowsForStudents_(ss, students), 'Email');
+  mergeRowValue_(rowValues, headerMap, 'GroupStatus', computeGroupStatus_(groupKey, groupRow, individualByEmail, students));
+  groupSheet.getRange(rowNumber, 1, 1, headers.length).setValues([rowValues]);
 }
 
 function findShowNight_(rows, period, country) {
@@ -681,6 +699,114 @@ function objectFromRow_(sheet, rowNumber) {
   const obj = {};
   headers.forEach((header, i) => obj[header] = values[i]);
   return obj;
+}
+
+function rowArrayToObject_(headers, values) {
+  const obj = {};
+  headers.forEach((header, i) => obj[header] = values[i]);
+  return obj;
+}
+
+function mergeRowValue_(rowValues, headerMap, header, value) {
+  if (!headerMap[header]) throw new Error('Missing column ' + header + '.');
+  rowValues[headerMap[header] - 1] = value === undefined || value === null ? '' : value;
+}
+
+function readIndividualRowsForStudents_(ss, students) {
+  const emails = {};
+  (students || []).forEach(student => {
+    const email = String(student.email || '').trim().toLowerCase();
+    if (email) emails[email] = true;
+  });
+  if (!Object.keys(emails).length) return [];
+  const sheet = getRequiredSheet_(ss, CONFIG.SHEETS.INDIVIDUAL);
+  requireHeaders_(sheet, CONFIG.INDIVIDUAL_HEADERS);
+  const headerMap = getHeaderMap_(sheet);
+  const headers = Object.keys(headerMap).sort((a, b) => headerMap[a] - headerMap[b]);
+  const emailCol = headerMap.Email;
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return [];
+  const emailValues = sheet.getRange(2, emailCol, lastRow - 1, 1).getValues();
+  const rows = [];
+  emailValues.forEach((row, i) => {
+    if (emails[String(row[0] || '').trim().toLowerCase()]) rows.push(i + 2);
+  });
+  return rows.map(rowNumber => rowArrayToObject_(headers, sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0]));
+}
+
+function findExistingRowByHeader_(sheet, headerMap, header, value) {
+  const col = headerMap[header];
+  if (!col) throw new Error('Missing key column ' + header + ' in ' + sheet.getName() + '.');
+  const target = String(value || '').trim().toLowerCase();
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return null;
+  const values = sheet.getRange(2, col, lastRow - 1, 1).getValues();
+  for (let i = 0; i < values.length; i++) {
+    if (String(values[i][0] || '').trim().toLowerCase() === target) return i + 2;
+  }
+  return null;
+}
+
+function buildTargetedGroupResponse_(ss, groupKey) {
+  const parts = String(groupKey || '').split('|');
+  const period = cleanPeriod_(parts[0]);
+  const country = parts.slice(1).join('|');
+  if (!period || !country) throw new Error('Missing groupKey.');
+
+  const rosterRows = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.ROSTER)).filter(row => {
+    return String(cleanPeriod_(row[CONFIG.ROSTER_HEADERS.PERIOD])) === String(period) &&
+      sameText_(row[CONFIG.ROSTER_HEADERS.COUNTRY], country);
+  });
+  if (!rosterRows.length) throw new Error('Group not found: ' + groupKey);
+
+  const groupSheet = getRequiredSheet_(ss, CONFIG.SHEETS.GROUP_GRADES);
+  requireHeaders_(groupSheet, CONFIG.GROUP_GRADE_HEADERS);
+  const groupHeaderMap = getHeaderMap_(groupSheet);
+  const groupHeaders = Object.keys(groupHeaderMap).sort((a, b) => groupHeaderMap[a] - groupHeaderMap[b]);
+  const groupRowNumber = findExistingRowByHeader_(groupSheet, groupHeaderMap, 'GroupKey', groupKey);
+  const groupGrades = groupRowNumber
+    ? rowArrayToObject_(groupHeaders, groupSheet.getRange(groupRowNumber, 1, 1, groupHeaders.length).getValues()[0])
+    : null;
+
+  const students = rosterRows.map(row => {
+    const email = stringOrBlank_(row[CONFIG.ROSTER_HEADERS.EMAIL]);
+    const studentName = `${stringOrBlank_(row[CONFIG.ROSTER_HEADERS.PREF_FIRST]) || stringOrBlank_(row[CONFIG.ROSTER_HEADERS.LEGAL])} ${stringOrBlank_(row[CONFIG.ROSTER_HEADERS.LAST_NAME])}`.trim();
+    return {
+      email,
+      preferredFirst: stringOrBlank_(row[CONFIG.ROSTER_HEADERS.PREF_FIRST]),
+      lastName: stringOrBlank_(row[CONFIG.ROSTER_HEADERS.LAST_NAME]),
+      legalFirst: stringOrBlank_(row[CONFIG.ROSTER_HEADERS.LEGAL]),
+      name: studentName,
+      individualGrades: {},
+      reflection: null
+    };
+  }).filter(student => student.email);
+  const individualByEmail = indexBy_(readIndividualRowsForStudents_(ss, students), 'Email');
+  students.forEach(student => student.individualGrades = individualByEmail[student.email] || {});
+  students.sort((a, b) => String(a.lastName).localeCompare(String(b.lastName)) || String(a.preferredFirst).localeCompare(String(b.preferredFirst)));
+
+  const reflections = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.REFLECTIONS));
+  students.forEach(student => {
+    student.reflection = reflections.find(item => String(item.Email || '').toLowerCase() === student.email.toLowerCase()) || null;
+  });
+  const peerResponses = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.PEER_GRADES)).filter(row => {
+    return cleanPeriod_(row[CONFIG.PEER_HEADERS.PERIOD]) === String(period) && sameText_(row[CONFIG.PEER_HEADERS.COUNTRY], country);
+  });
+  const group = {
+    groupKey,
+    period,
+    country,
+    students,
+    groupGrades,
+    showNightData: findShowNight_(tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.SHOW_NIGHT)), period, country),
+    peerResponses,
+    status: computeGroupStatus_(groupKey, groupGrades, individualByEmail, students),
+    studentPeerData: {}
+  };
+  students.forEach(student => {
+    group.studentPeerData[student.email] = findPeerForStudent_(peerResponses, student);
+  });
+  return { ok: true, group };
 }
 
 function getWriteLock_() {
