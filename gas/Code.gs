@@ -436,22 +436,56 @@ function findShowNight_(rows, period, country) {
 function findPeerForStudent_(responses, student) {
   const first = normalizeName_(student.preferredFirst);
   const last = normalizeName_(student.lastName);
+  const full = normalizeName_(student.name || `${student.preferredFirst || ''} ${student.lastName || ''}`);
+  const matchesStudentName = function(name) {
+    const norm = normalizeName_(name);
+    if (!norm) return false;
+    return (first && (norm === first || norm.indexOf(first) >= 0)) ||
+      (last && (norm === last || norm.indexOf(last) >= 0)) ||
+      (full && (norm === full || norm.indexOf(full) >= 0 || full.indexOf(norm) >= 0));
+  };
+
+  let submissionRow = null;
+  for (let i = 0; i < responses.length; i++) {
+    const row = responses[i];
+    if (matchesStudentName(row[CONFIG.PEER_HEADERS.SUBMITTER])) {
+      submissionRow = row;
+      break;
+    }
+  }
+
+  const allocations = [];
+  if (submissionRow) {
+    for (let n = 1; n <= 4; n++) {
+      const name = stringOrBlank_(submissionRow[`Peer${n}Name`]);
+      if (!name) continue;
+      allocations.push({
+        name,
+        percent: submissionRow[`Peer${n}Percent`] || '',
+        justification: submissionRow[`Peer${n}Justification`] || ''
+      });
+    }
+  }
+
+  const receivedGrades = [];
   for (let i = 0; i < responses.length; i++) {
     const row = responses[i];
     for (let n = 1; n <= 4; n++) {
-      const name = String(row[`Peer${n}Name`] || '');
-      const norm = normalizeName_(name);
-      if (!norm) continue;
-      if (norm === first || norm === last || norm.indexOf(first) >= 0 || norm.indexOf(last) >= 0) {
-        return {
-          submitter: row[CONFIG.PEER_HEADERS.SUBMITTER] || '',
-          percent: row[`Peer${n}Percent`] || '',
-          justification: row[`Peer${n}Justification`] || ''
-        };
-      }
+      if (!matchesStudentName(row[`Peer${n}Name`])) continue;
+      receivedGrades.push({
+        submitter: row[CONFIG.PEER_HEADERS.SUBMITTER] || '',
+        percent: row[`Peer${n}Percent`] || '',
+        justification: row[`Peer${n}Justification`] || ''
+      });
     }
   }
-  return null;
+
+  if (!submissionRow && !receivedGrades.length) return null;
+  return {
+    submitter: submissionRow ? (submissionRow[CONFIG.PEER_HEADERS.SUBMITTER] || '') : '',
+    allocations,
+    receivedGrades
+  };
 }
 
 function getRubricConfig_() {
