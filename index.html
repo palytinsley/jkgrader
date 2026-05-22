@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JK Show and Dress Grader</title>
+  <script>
+    (function () {
+      const saved = localStorage.getItem('jkDressGraderTheme');
+      const theme = ['default', 'millennial-gray', 'dark-academia'].includes(saved) ? saved : 'default';
+      document.documentElement.setAttribute('data-theme', theme);
+      if (localStorage.getItem('jkDressGraderSidebarOpen') === 'false') document.documentElement.classList.add('sidebar-collapsed');
+    })();
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800&display=swap');
+    :root {
+      color-scheme: light;
+      --primary:#4a40e0; --primary-dim:#3d30d4; --primary-soft:#9795ff;
+      --secondary:#00628c; --tertiary:#006947; --tertiary-container:#69f6b8; --on-tertiary-container:#005a3c;
+      --error:#b41340; --surface:#f4f6ff; --surface-container-lowest:#fff; --surface-container-low:#eaf1ff;
+      --surface-container:#dce9ff; --surface-container-high:#d2e4ff; --surface-container-highest:#c9deff;
+      --on-surface:#203044; --on-surface-variant:#4d5d73; --outline-variant:#9eaec7;
+      --sidebar-surface:rgba(234,241,255,.78); --glass:rgba(244,246,255,.78); --on-primary:#fff;
+      --hairline:rgba(158,174,199,.12); --hairline-strong:rgba(158,174,199,.25); --focus-ring:rgba(74,64,224,.24);
+      --ambient:0 22px 40px rgba(32,48,68,.06); --ambient-tight:0 10px 28px rgba(32,48,68,.05);
+      --scrim:rgba(7,21,43,.54); --toast-bg:rgba(7,21,43,.94); --warning:#b7791f; --warning-bg:#fff8e1;
+      --radius:24px; --radius-md:14px; --radius-sm:6px; --speed:180ms;
+    }
+    html[data-theme="millennial-gray"] {
+      --primary:#4a40e0; --primary-dim:#3d30d4; --primary-soft:#a7a4ff; --secondary:#395f7a; --tertiary:#346a59;
+      --tertiary-container:#bce7d8; --on-tertiary-container:#214f41; --surface:#f5f5f7; --surface-container-lowest:#fff;
+      --surface-container-low:#ebebef; --surface-container:#e2e2e8; --surface-container-high:#d7d7df;
+      --surface-container-highest:#cdced6; --on-surface:#1f1f24; --on-surface-variant:#6b6b75; --outline-variant:#d0d0d6;
+      --sidebar-surface:rgba(235,235,239,.82); --glass:rgba(245,245,247,.82);
+    }
+    html[data-theme="dark-academia"] {
+      color-scheme: dark; --primary:#7c83ff; --primary-dim:#5a63e0; --primary-soft:#aeb4ff; --secondary:#4da3ff;
+      --tertiary:#4dd4a8; --tertiary-container:#173f34; --on-tertiary-container:#9ef4d2; --error:#ff7f9a;
+      --surface:#121417; --surface-container-lowest:#22262c; --surface-container-low:#1b1f24; --surface-container:#252b32;
+      --surface-container-high:#2b323a; --surface-container-highest:#323944; --on-surface:#e8ecf1; --on-surface-variant:#a2acb8;
+      --outline-variant:#4a5360; --sidebar-surface:rgba(27,31,36,.82); --glass:rgba(18,20,23,.82);
+      --hairline:rgba(162,172,184,.12); --hairline-strong:rgba(162,172,184,.24); --scrim:rgba(0,0,0,.68);
+      --toast-bg:rgba(18,20,23,.96); --warning:#f6c177; --warning-bg:#3a3018;
+    }
+    *{box-sizing:border-box} html{background:var(--surface)} body{margin:0;background:linear-gradient(180deg,var(--surface-container-lowest),var(--surface) 30rem);color:var(--on-surface);font-family:Inter,Arial,sans-serif;letter-spacing:0}
+    button,input,select,textarea{font:inherit} button{cursor:pointer}.ti{font-size:1.05rem;line-height:1}
+    button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--focus-ring);outline-offset:3px}
+    .hidden{display:none!important}.app-shell{display:grid;grid-template-columns:324px minmax(0,1fr);min-height:100vh;transition:grid-template-columns var(--speed)}
+    html.sidebar-collapsed .app-shell{grid-template-columns:0 minmax(0,1fr)}.sidebar{background:var(--sidebar-surface);backdrop-filter:blur(20px);height:100vh;overflow:auto;padding:2rem 1.5rem;position:sticky;top:0;width:324px}
+    html.sidebar-collapsed .sidebar{opacity:0;padding-left:0;padding-right:0;pointer-events:none;transform:translateX(-100%);width:0}
+    .sidebar-toggle-btn{left:calc(324px + .75rem);position:fixed;top:.75rem;z-index:30}html.sidebar-collapsed .sidebar-toggle-btn{left:.75rem}
+    h1,h2,h3,h4,.rubric-title{font-family:Manrope,Inter,sans-serif;letter-spacing:0}h1,h2,h3,h4,p{margin-top:0}.brand-block{margin-bottom:1.3rem;padding:.3rem}.brand-block h1{font-size:1.65rem;line-height:1.05;margin:.25rem 0 0}
+    .eyebrow{color:var(--primary);font-size:.68rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase}.subtle{color:var(--on-surface-variant)}
+    .filter-row{display:grid;gap:.65rem;grid-template-columns:repeat(3,1fr);margin-bottom:1rem}.filter-btn,.secondary-btn,.primary-btn,.icon-btn,.text-btn{align-items:center;border:0;display:inline-flex;font-weight:800;gap:.42rem;justify-content:center;transition:background var(--speed),transform var(--speed),box-shadow var(--speed);white-space:nowrap}
+    .filter-btn{background:transparent;border-radius:999px;color:var(--on-surface-variant);min-height:40px;padding:.55rem .7rem}.filter-btn:hover,.secondary-btn:hover,.icon-btn:hover,.text-btn:hover{transform:translateY(-1px)}
+    .filter-btn.active,.primary-btn{background:linear-gradient(135deg,var(--primary),var(--primary-dim));box-shadow:0 16px 30px rgba(74,64,224,.18);color:var(--on-primary)}
+    .primary-btn,.secondary-btn,.text-btn{border-radius:999px;min-height:40px;padding:.58rem .95rem}.secondary-btn,.text-btn,.icon-btn{background:var(--surface-container-high);color:var(--primary)}
+    .icon-btn{border-radius:999px;height:42px;width:42px}.jump-label{color:var(--on-surface-variant);display:block;font-size:.73rem;font-weight:800;letter-spacing:.05em;margin:1rem 0 .45rem;text-transform:uppercase}
+    .group-jump,.input,textarea,select{appearance:none;background:var(--surface-container-lowest);border:0;border-radius:var(--radius-sm);box-shadow:inset 0 0 0 1px var(--hairline-strong);color:var(--on-surface);padding:.72rem .85rem;width:100%}
+    textarea{line-height:1.45;min-height:88px;resize:vertical}.group-list{display:grid;gap:.85rem;margin-top:1.2rem}.group-item{background:var(--surface-container-lowest);border:0;border-radius:var(--radius-md);box-shadow:inset 0 0 0 1px var(--hairline);color:var(--on-surface);display:grid;gap:.75rem;padding:.85rem;text-align:left;width:100%}
+    .group-item.active{background:var(--surface-container-high);box-shadow:inset 4px 0 0 var(--primary),var(--ambient-tight);transform:translateX(3px)}.group-thumb{aspect-ratio:16/9;background:var(--surface-container-low);border-radius:var(--radius-sm);object-fit:cover;width:100%}
+    .group-item-main{align-items:center;display:flex;justify-content:space-between;gap:.65rem}.status-badge,.period-badge,.score-pill{align-items:center;border-radius:999px;display:inline-flex;font-size:.72rem;font-weight:800;gap:.3rem;padding:.32rem .55rem}
+    .status-badge{background:var(--surface-container);color:var(--on-surface-variant)}.status-badge.complete{background:var(--tertiary-container);color:var(--on-tertiary-container)}.status-badge.progress{background:var(--warning-bg);color:var(--warning)}.period-badge,.score-pill{background:var(--surface-container-low);color:var(--primary)}
+    .workspace{min-width:0;padding:2rem}.workspace-progress-bar{align-items:center;background:var(--surface-container-lowest);border-radius:var(--radius-sm);box-shadow:inset 0 0 0 1px var(--hairline);display:grid;gap:.75rem;grid-template-columns:minmax(120px,1fr) auto;margin:-2rem -2rem 0;min-height:36px;padding:.45rem .75rem;position:sticky;top:0;z-index:8}
+    progress{appearance:none;background:var(--surface-container);border:0;border-radius:999px;height:8px;overflow:hidden;width:100%}progress::-webkit-progress-bar{background:var(--surface-container)}progress::-webkit-progress-value{background:var(--primary)}
+    .workspace-progress-copy{align-items:baseline;color:var(--on-surface-variant);display:inline-flex;font-size:.78rem;font-weight:800;gap:.5rem}.topbar{align-items:flex-start;background:var(--glass);backdrop-filter:blur(20px);border-radius:0 0 var(--radius) var(--radius);box-shadow:var(--ambient);display:flex;gap:1rem;justify-content:space-between;margin:0 -2rem 1rem;padding:1.6rem 2rem 1.35rem;position:sticky;top:36px;z-index:7}
+    .topbar h2{font-size:clamp(2rem,4vw,3.1rem);line-height:1.02;margin:.2rem 0}.topbar-actions,.grading-actions{align-items:center;display:flex;flex-wrap:wrap;gap:.6rem;justify-content:flex-end}.settings-wrap{position:relative}.settings-menu{background:var(--surface-container-lowest);border-radius:var(--radius-md);box-shadow:var(--ambient),0 0 0 1px var(--hairline-strong);display:grid;min-width:260px;padding:.6rem;position:absolute;right:0;top:calc(100% + .5rem);z-index:20}.settings-menu a,.settings-menu button{align-items:center;background:transparent;border:0;border-radius:var(--radius-sm);color:var(--on-surface);display:flex;gap:.55rem;padding:.7rem;text-align:left;text-decoration:none}.settings-menu a:hover,.settings-menu button:hover{background:var(--surface-container-low)}
+    .theme-options{display:grid;gap:.35rem;margin-top:.4rem}.theme-option.active{background:var(--surface-container-high)}.save-pill{align-items:center;background:var(--tertiary-container);border-radius:999px;color:var(--on-tertiary-container);display:inline-flex;font-size:.78rem;font-weight:800;gap:.35rem;min-height:36px;padding:.5rem .8rem}.save-pill.saving{background:var(--surface-container-high);color:var(--primary)}.save-pill.error{background:#ffdbe3;color:var(--error)}
+    .tab-row{display:flex;gap:.55rem;margin:.75rem 0 1rem}.tab-pill{background:var(--surface-container-high);border:0;border-radius:999px;color:var(--primary);font-weight:800;padding:.65rem 1rem}.tab-pill.active{background:var(--primary);color:#fff}
+    .notice{border-radius:var(--radius-sm);font-weight:700;margin-bottom:1rem;padding:.9rem 1rem}.notice.error{background:#ffdbe3;color:var(--error)}
+    .score-bar{background:var(--surface-container-lowest);border-radius:var(--radius-md);box-shadow:var(--ambient-tight),inset 0 0 0 1px var(--hairline);display:grid;gap:.75rem;grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:1rem;padding:.8rem;position:sticky;top:170px;z-index:6}.score-chip{background:var(--surface-container-low);border-radius:var(--radius-sm);padding:.75rem}.score-chip strong{display:block;font-family:Manrope,Inter,sans-serif}.score-chip span{color:var(--on-surface-variant);display:block;font-size:.76rem;font-weight:800;margin-top:.25rem}
+    .empty-state{background:var(--surface-container-lowest);border-radius:var(--radius);box-shadow:var(--ambient);padding:3rem;text-align:center}.dress-grid{display:grid;gap:1rem;grid-template-columns:minmax(360px,.85fr) minmax(520px,1.15fr)}.people-layout{display:grid;gap:1rem}.visual-panel,.scoring-panel,.shared-row,.student-column,.modal-container,.message-center-container,.schoology-container{background:var(--surface-container-lowest);border-radius:var(--radius-md);box-shadow:var(--ambient-tight),inset 0 0 0 1px var(--hairline);padding:1rem}
+    .carousel{background:var(--surface-container-low);border-radius:var(--radius-sm);display:grid;min-height:420px;overflow:hidden;place-items:center;position:relative}.carousel img{height:100%;max-height:520px;object-fit:contain;width:100%}.carousel-placeholder{text-align:center;color:var(--on-surface-variant)}.carousel-placeholder .ti{font-size:3rem}.carousel-nav{align-items:center;background:rgba(0,0,0,.42);border:0;border-radius:999px;color:#fff;display:flex;height:42px;justify-content:center;position:absolute;top:50%;transform:translateY(-50%);width:42px}.carousel-nav.prev{left:.75rem}.carousel-nav.next{right:.75rem}.carousel-label{background:rgba(0,0,0,.55);border-radius:999px;bottom:.8rem;color:#fff;font-size:.78rem;font-weight:800;left:50%;padding:.35rem .7rem;position:absolute;transform:translateX(-50%)}
+    .blurb-box{background:var(--surface-container-low);border-radius:var(--radius-sm);line-height:1.5;margin-top:.85rem;max-height:190px;overflow:auto;padding:1rem;white-space:pre-wrap}.scoring-panel{display:grid;gap:1rem}.score-section{border-top:1px solid var(--hairline-strong);display:grid;gap:.8rem;padding-top:1rem}.score-section:first-child{border-top:0;padding-top:0}.section-head{align-items:center;display:flex;gap:.8rem;justify-content:space-between}.section-head h3,.section-head h4{margin:0}.criteria-list{display:grid;gap:.45rem}.criterion{background:var(--surface-container-low);border-left:3px solid var(--primary);border-radius:var(--radius-sm);padding:.65rem .75rem}.criterion strong{display:block;font-size:.82rem}.criterion p{color:var(--on-surface-variant);font-size:.83rem;line-height:1.45;margin:.2rem 0 0}.score-row{align-items:end;display:grid;gap:.75rem;grid-template-columns:130px minmax(0,1fr) auto}.score-row label{display:grid;gap:.35rem;font-size:.72rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase}.student-grid{display:grid;gap:1rem;grid-template-columns:repeat(4,minmax(230px,1fr))}.student-column{display:grid;gap:.85rem;padding:.9rem}.student-head{align-items:flex-start;display:flex;gap:.6rem;justify-content:space-between}.mail-btn{height:36px;width:36px}.peer-box,.override-box{background:var(--surface-container-low);border-radius:var(--radius-sm);padding:.75rem}.muted{color:var(--on-surface-variant)}.role-select{margin-bottom:.65rem}.override-pill{align-items:center;background:var(--surface-container);border-radius:999px;color:var(--on-surface-variant);display:inline-flex;font-size:.74rem;font-weight:800;gap:.35rem;padding:.34rem .55rem}.override-pill.active{background:var(--warning-bg);color:var(--warning)}.override-pill s{opacity:.7}.override-controls{display:grid;gap:.55rem;margin-top:.55rem}.inline-error{color:var(--error);font-size:.76rem;font-weight:800;min-height:1em}.lightbox img{max-height:90vh;max-width:92vw;object-fit:contain}.toast{background:var(--toast-bg);border-radius:var(--radius-md);bottom:1.25rem;color:#fff;left:50%;max-width:min(560px,calc(100vw - 2rem));padding:.9rem 1rem;position:fixed;transform:translateX(-50%);z-index:100}
+    .modal-overlay{align-items:center;background:var(--scrim);backdrop-filter:blur(8px);bottom:0;display:flex;justify-content:center;left:0;padding:1.5rem;position:fixed;right:0;top:0;z-index:90}.modal-container{display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;max-height:min(92vh,900px);max-width:760px;overflow:hidden;width:100%;padding:0}.modal-header,.modal-footer{align-items:center;background:var(--surface-container-low);display:flex;gap:1rem;justify-content:space-between;padding:1rem 1.25rem}.modal-body{min-height:0;overflow:auto;padding:1rem 1.25rem}.modal-preview{border:0;min-height:520px;width:100%}.message-center-container{display:grid;grid-template-rows:auto auto auto minmax(0,1fr);max-height:92vh;max-width:min(1320px,calc(100vw - 2rem));overflow:hidden;padding:0;width:100%}.mc-toolbar,.mc-actions{align-items:center;background:var(--surface-container-lowest);display:flex;flex-wrap:wrap;gap:.7rem;padding:.9rem 1.25rem}.mc-actions{background:var(--surface-container-low)}.mc-layout{display:grid;grid-template-columns:430px minmax(0,1fr);min-height:0}.mc-list{background:var(--surface-container-low);display:grid;gap:.55rem;overflow:auto;padding:1rem}.mc-row{align-items:center;background:var(--surface-container-lowest);border:0;border-radius:var(--radius-sm);display:grid;gap:.65rem;grid-template-columns:auto minmax(0,1fr) auto;padding:.7rem;text-align:left}.mc-row.active{box-shadow:inset 4px 0 0 var(--primary)}.mc-preview-wrap{display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0}.schoology-container{max-height:92vh;max-width:920px;overflow:hidden;padding:0;width:100%}.schoology-list{display:grid;gap:.5rem;max-height:72vh;overflow:auto;padding:1rem}.schoology-row{align-items:center;background:var(--surface-container-low);border-radius:var(--radius-sm);display:grid;gap:.8rem;grid-template-columns:minmax(0,1fr) 90px 90px 110px;padding:.75rem}
+    #splashScreen{align-items:center;background:var(--surface-container-lowest);display:flex;inset:0;justify-content:center;position:fixed;z-index:120}.splash-inner{text-align:center}.splash-spinner{animation:spin .9s linear infinite;border:3px solid var(--surface-container-high);border-radius:50%;border-top-color:var(--primary);height:42px;margin:0 auto 1rem;width:42px}@keyframes spin{to{transform:rotate(360deg)}}#splashScreen.fade-out{opacity:0;pointer-events:none;transition:opacity .35s}
+    @media(max-width:1180px){.dress-grid,.student-grid{grid-template-columns:1fr 1fr}.score-bar{grid-template-columns:1fr 1fr}.topbar{position:relative;top:auto}.score-bar{top:36px}}@media(max-width:860px){.app-shell{grid-template-columns:1fr}.sidebar{height:auto;position:relative;width:auto}html.sidebar-collapsed .sidebar{display:none}.workspace{padding:1.25rem}.workspace-progress-bar{margin:-1.25rem -1.25rem 0}.topbar{margin:0 -1.25rem 1rem;padding:1.25rem}.dress-grid,.student-grid,.score-bar,.mc-layout{grid-template-columns:1fr}.score-row{grid-template-columns:1fr}.carousel{min-height:300px}}
+  </style>
+</head>
+<body>
+  <div id="splashScreen"><div class="splash-inner"><div class="splash-spinner"></div><p class="eyebrow">Loading JK grader</p></div></div>
+  <div class="app-shell">
+    <button class="icon-btn sidebar-toggle-btn" id="sidebarToggleBtn" type="button" title="Toggle sidebar" aria-label="Toggle sidebar"><i class="ti ti-layout-sidebar-left-expand"></i></button>
+    <aside class="sidebar" aria-label="Dress groups">
+      <div class="brand-block"><p class="eyebrow">JK Show Grader</p><h1>Dress Groups</h1></div>
+      <div class="filter-row" role="group" aria-label="Filter by period">
+        <button class="filter-btn active" data-period="All">All</button>
+        <button class="filter-btn" data-period="5">Period 5</button>
+        <button class="filter-btn" data-period="6">Period 6</button>
+      </div>
+      <label class="jump-label" for="groupJump">Quick jump</label>
+      <select id="groupJump" class="group-jump"></select>
+      <div id="groupList" class="group-list"></div>
+    </aside>
+    <main class="workspace">
+      <div class="workspace-progress-bar">
+        <progress id="summaryProgress" value="0" max="100"></progress>
+        <span class="workspace-progress-copy"><strong id="summaryCount">0/0 Groups Graded</strong><span id="summaryPercent">0%</span></span>
+      </div>
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="periodLabel">Select a group</p>
+          <h2 id="countryTitle">JK Show and Dress Grader</h2>
+          <p class="subtle" id="studentLine">Load the class data to begin.</p>
+          <div class="tab-row" role="tablist">
+            <button class="tab-pill active" data-tab="dress" type="button"><i class="ti ti-hanger"></i> Dress</button>
+            <button class="tab-pill" data-tab="people" type="button"><i class="ti ti-users"></i> People</button>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <span class="save-pill" id="saveState"><i class="ti ti-device-floppy"></i> Loading</span>
+          <div class="grading-actions">
+            <button class="secondary-btn" id="prevGroupBtn" type="button"><i class="ti ti-arrow-left"></i> Previous</button>
+            <button class="secondary-btn" id="nextGroupBtn" type="button">Next <i class="ti ti-arrow-right"></i></button>
+            <button class="primary-btn" id="nextUngradedBtn" type="button"><i class="ti ti-player-skip-forward"></i> Next Ungraded</button>
+          </div>
+          <div class="settings-wrap">
+            <button class="icon-btn" id="settingsBtn" type="button" aria-label="Settings"><i class="ti ti-settings"></i></button>
+            <div class="settings-menu hidden" id="settingsMenu">
+              <a id="openSpreadsheetLink" href="#" target="_blank" rel="noopener"><i class="ti ti-table"></i> Open spreadsheet</a>
+              <a href="https://script.google.com/home/projects/1Wj32Xppq-IlyxQ2p--guCnTnxc3eva7ckX8DYT6NsvtVMYX4i62KWWcF/edit" target="_blank" rel="noopener"><i class="ti ti-code"></i> Edit script</a>
+              <button id="messageCenterBtn" type="button"><i class="ti ti-mail-cog"></i> Message Center</button>
+              <button id="schoologyModeBtn" type="button"><i class="ti ti-clipboard-text"></i> Schoology Mode</button>
+              <button id="setupSheetsBtn" type="button"><i class="ti ti-table-plus"></i> Setup Sheets</button>
+              <div class="theme-options">
+                <button class="theme-option" data-theme-option="default" type="button"><i class="ti ti-sun"></i> Default</button>
+                <button class="theme-option" data-theme-option="millennial-gray" type="button"><i class="ti ti-mist"></i> Millennial Gray</button>
+                <button class="theme-option" data-theme-option="dark-academia" type="button"><i class="ti ti-moon-stars"></i> Dark Academia</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+      <section class="notice error hidden" id="errorBox"></section>
+      <section class="score-bar hidden" id="scoreBar"></section>
+      <section class="empty-state" id="emptyState"><h2>Choose a dress group.</h2><p class="subtle">The dashboard will show photos, the program blurb, rubric anchors, peer notes, and score controls.</p></section>
+      <section id="dressTab" class="dress-grid hidden"></section>
+      <section id="peopleTab" class="people-layout hidden"></section>
+    </main>
+  </div>
+  <div class="toast hidden" id="toast" role="status"></div>
+  <div class="modal-overlay hidden lightbox" id="lightbox"><button class="icon-btn" id="lightboxClose" type="button" aria-label="Close"><i class="ti ti-x"></i></button><img id="lightboxImg" alt=""></div>
+  <div class="modal-overlay hidden" id="emailModal" role="dialog" aria-modal="true">
+    <div class="modal-container">
+      <div class="modal-header"><div><p class="eyebrow">Rubric email</p><h3>Preview and Send</h3></div><button class="icon-btn" id="emailClose" type="button"><i class="ti ti-x"></i></button></div>
+      <div class="modal-body">
+        <p><strong>To:</strong> <span id="emailTo">-</span></p>
+        <label class="jump-label" for="emailSignoff">Sign-off</label><input class="input" id="emailSignoff" value="Mr. Tinsley">
+        <label style="display:flex;gap:.45rem;margin:1rem 0;font-weight:800"><input id="emailTestMode" type="checkbox"> Test send to ktinsley@pausd.org</label>
+        <label style="display:flex;gap:.45rem;margin:1rem 0;font-weight:800"><input id="emailDryRun" type="checkbox" checked> Dry run / log only</label>
+        <div class="notice error hidden" id="emailWarning"></div>
+        <iframe class="modal-preview" id="emailPreview" title="Email preview"></iframe>
+      </div>
+      <div class="modal-footer"><button class="secondary-btn" id="emailCancel" type="button">Cancel</button><button class="primary-btn" id="emailSend" type="button"><i class="ti ti-send"></i> Send</button></div>
+    </div>
+  </div>
+  <div class="modal-overlay hidden" id="messageCenterModal" role="dialog" aria-modal="true">
+    <div class="message-center-container">
+      <div class="modal-header"><div><p class="eyebrow">Teacher messaging</p><h3>Message Center</h3></div><button class="icon-btn" id="mcClose" type="button"><i class="ti ti-x"></i></button></div>
+      <div class="mc-toolbar">
+        <input class="input" id="mcSignoff" value="Mr. Tinsley" style="max-width:220px">
+        <label><input id="mcIncludeSent" type="checkbox"> Include already sent</label>
+        <label><input id="mcShowIncomplete" type="checkbox"> Show incomplete</label>
+        <label><input id="mcDryRun" type="checkbox" checked> Dry run</label>
+      </div>
+      <div class="mc-actions">
+        <button class="secondary-btn" id="mcSelectEligible" type="button"><i class="ti ti-checks"></i> Select all eligible</button>
+        <button class="secondary-btn" id="mcSelectUnsent" type="button"><i class="ti ti-mail-check"></i> Select unsent only</button>
+        <button class="secondary-btn" id="mcClear" type="button"><i class="ti ti-eraser"></i> Clear selection</button>
+        <button class="secondary-btn" id="mcTest" type="button"><i class="ti ti-flask"></i> Test send</button>
+        <button class="primary-btn" id="mcSend" type="button"><i class="ti ti-send"></i> Batch send</button>
+        <span class="subtle" id="mcStatus"></span>
+      </div>
+      <div class="mc-layout"><div class="mc-list" id="mcList"></div><div class="mc-preview-wrap"><div class="modal-body"><strong id="mcPreviewName">Select a student</strong></div><iframe class="modal-preview" id="mcPreview"></iframe></div></div>
+    </div>
+  </div>
+  <div class="modal-overlay hidden" id="schoologyModal" role="dialog" aria-modal="true">
+    <div class="schoology-container">
+      <div class="modal-header"><div><p class="eyebrow">Read-only export</p><h3>Schoology Mode</h3></div><div class="filter-row" style="margin:0"><button class="filter-btn active" data-schoology-period="All">All</button><button class="filter-btn" data-schoology-period="5">Period 5</button><button class="filter-btn" data-schoology-period="6">Period 6</button></div><button class="icon-btn" id="schoologyClose" type="button"><i class="ti ti-x"></i></button></div>
+      <div class="schoology-list" id="schoologyList"></div>
+    </div>
+  </div>
+  <script>
+    const GAS_URL = '';
+    const SCRIPT_ID = '1Wj32Xppq-IlyxQ2p--guCnTnxc3eva7ckX8DYT6NsvtVMYX4i62KWWcF';
+    const STORAGE = { theme:'jkDressGraderTheme', sidebar:'jkDressGraderSidebarOpen', last:'jkDressGraderLastGroupKey' };
+    const state = { groups:[], rubric:{}, selectedGroupKey:'', selectedGroup:null, period:'All', tab:'dress', photoIndex:0, spreadsheetUrl:'', rollup:[], mcSelected:new Set(), mcActive:'', schoologyPeriod:'All', emailDraft:null };
+    const els = {};
+    document.addEventListener('DOMContentLoaded', init);
+    function init(){
+      ['summaryProgress','summaryCount','summaryPercent','groupJump','groupList','periodLabel','countryTitle','studentLine','saveState','settingsBtn','settingsMenu','openSpreadsheetLink','messageCenterBtn','schoologyModeBtn','setupSheetsBtn','prevGroupBtn','nextGroupBtn','nextUngradedBtn','sidebarToggleBtn','errorBox','scoreBar','emptyState','dressTab','peopleTab','toast','lightbox','lightboxImg','lightboxClose','emailModal','emailClose','emailCancel','emailTo','emailSignoff','emailTestMode','emailDryRun','emailWarning','emailPreview','emailSend','messageCenterModal','mcClose','mcSignoff','mcIncludeSent','mcShowIncomplete','mcDryRun','mcSelectEligible','mcSelectUnsent','mcClear','mcTest','mcSend','mcStatus','mcList','mcPreviewName','mcPreview','schoologyModal','schoologyClose','schoologyList'].forEach(id=>els[id]=document.getElementById(id));
+      bindEvents(); updateThemeControls(); loadAppData();
+    }
+    function bindEvents(){
+      document.querySelectorAll('[data-period]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('[data-period]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.period=btn.dataset.period;loadAppData();}));
+      document.querySelectorAll('[data-tab]').forEach(btn=>btn.addEventListener('click',()=>{state.tab=btn.dataset.tab;document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===state.tab));renderSelectedGroup();}));
+      document.querySelectorAll('[data-theme-option]').forEach(btn=>btn.addEventListener('click',()=>applyTheme(btn.dataset.themeOption)));
+      document.querySelectorAll('[data-schoology-period]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('[data-schoology-period]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.schoologyPeriod=btn.dataset.schoologyPeriod;renderSchoology();}));
+      els.groupJump.addEventListener('change',e=>selectGroup(e.target.value)); els.prevGroupBtn.addEventListener('click',()=>moveGroup(-1)); els.nextGroupBtn.addEventListener('click',()=>moveGroup(1)); els.nextUngradedBtn.addEventListener('click',selectNextUngraded);
+      els.sidebarToggleBtn.addEventListener('click',toggleSidebar); els.settingsBtn.addEventListener('click',e=>{e.stopPropagation();els.settingsMenu.classList.toggle('hidden');}); document.addEventListener('click',e=>{if(!e.target.closest('.settings-wrap'))els.settingsMenu.classList.add('hidden');});
+      els.setupSheetsBtn.addEventListener('click',setupSheets); els.messageCenterBtn.addEventListener('click',openMessageCenter); els.schoologyModeBtn.addEventListener('click',openSchoology); els.lightboxClose.addEventListener('click',closeLightbox); els.lightbox.addEventListener('click',e=>{if(e.target===els.lightbox)closeLightbox();});
+      els.emailClose.addEventListener('click',closeEmail); els.emailCancel.addEventListener('click',closeEmail); els.emailSend.addEventListener('click',sendEmail);
+      els.mcClose.addEventListener('click',closeMessageCenter); els.mcIncludeSent.addEventListener('change',renderMessageCenter); els.mcShowIncomplete.addEventListener('change',renderMessageCenter); els.mcSelectEligible.addEventListener('click',()=>selectMessages('eligible')); els.mcSelectUnsent.addEventListener('click',()=>selectMessages('unsent')); els.mcClear.addEventListener('click',()=>{state.mcSelected.clear();renderMessageCenter();}); els.mcTest.addEventListener('click',sendMessageTest); els.mcSend.addEventListener('click',sendMessageBatch);
+      els.schoologyClose.addEventListener('click',()=>els.schoologyModal.classList.add('hidden'));
+      document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLightbox();closeEmail();closeMessageCenter();els.schoologyModal.classList.add('hidden');}});
+    }
+    async function apiGet(action, params={}){
+      if(!GAS_URL) throw new Error('Set GAS_URL in index.html to the deployed Web App URL.');
+      const url = new URL(GAS_URL); url.searchParams.set('action',action); Object.entries(params).forEach(([k,v])=>url.searchParams.set(k,v));
+      const res = await fetch(url.toString()); const json = await res.json(); if(!json.ok) throw new Error(json.message || 'Request failed.'); return json;
+    }
+    async function apiPost(payload){
+      if(!GAS_URL) throw new Error('Set GAS_URL in index.html to the deployed Web App URL.');
+      const res = await fetch(GAS_URL,{method:'POST',body:JSON.stringify(payload)}); const json = await res.json(); if(!json.ok) throw new Error(json.message || 'Request failed.'); return json;
+    }
+    async function loadAppData(){
+      clearError(); setSaveState('Loading','saving');
+      try{const data=await apiGet('getAppData',{period:state.period}); state.groups=data.groups||[]; state.rubric=data.rubric||{}; state.spreadsheetUrl=data.spreadsheetUrl||''; els.openSpreadsheetLink.href=state.spreadsheetUrl||'#'; renderShell(data.summary||{}); const last=localStorage.getItem(STORAGE.last); selectGroup(state.groups.find(g=>g.groupKey===state.selectedGroupKey)?.groupKey || state.groups.find(g=>g.groupKey===last)?.groupKey || (state.groups[0]&&state.groups[0].groupKey)); setSaveState('Saved');}
+      catch(err){showError(err.message);renderShell({});}
+      finally{dismissSplash();}
+    }
+    function renderShell(summary){
+      els.summaryProgress.value=summary.percent||0; els.summaryCount.textContent=`${summary.complete||0}/${summary.total||0} Groups Graded`; els.summaryPercent.textContent=`${summary.percent||0}%`;
+      els.groupJump.innerHTML=state.groups.map(g=>`<option value="${escAttr(g.groupKey)}">${esc(g.period)} - ${esc(g.country)}</option>`).join('');
+      els.groupList.innerHTML=state.groups.map(g=>{const photo=g.showNightData&&g.showNightData.photos&&g.showNightData.photos[0];return `<button class="group-item ${g.groupKey===state.selectedGroupKey?'active':''}" data-group-key="${escAttr(g.groupKey)}">${photo?`<img class="group-thumb" src="${escAttr(driveThumbUrl(photo.url,400)||'')}" alt="">`:''}<span class="group-item-main"><strong>${esc(g.country)}</strong><span class="period-badge">P${esc(g.period)}</span></span><span class="${statusClass(g.status)}">${esc(g.status)}</span></button>`}).join('');
+      els.groupList.querySelectorAll('[data-group-key]').forEach(btn=>btn.addEventListener('click',()=>selectGroup(btn.dataset.groupKey)));
+    }
+    function selectGroup(groupKey){if(!groupKey)return;state.selectedGroupKey=groupKey;state.selectedGroup=state.groups.find(g=>g.groupKey===groupKey)||null;localStorage.setItem(STORAGE.last,groupKey);els.groupJump.value=groupKey;renderShell(summarizeVisible());renderSelectedGroup();}
+    function renderSelectedGroup(){
+      const g=state.selectedGroup; if(!g){els.emptyState.classList.remove('hidden');els.scoreBar.classList.add('hidden');els.dressTab.classList.add('hidden');els.peopleTab.classList.add('hidden');return;}
+      els.emptyState.classList.add('hidden'); els.scoreBar.classList.remove('hidden'); els.periodLabel.textContent=`Period ${g.period}`; els.countryTitle.textContent=g.country; els.studentLine.textContent=`${g.students.length} students · ${g.status}`; renderScoreBar(g);
+      els.dressTab.classList.toggle('hidden',state.tab!=='dress'); els.peopleTab.classList.toggle('hidden',state.tab!=='people'); if(state.tab==='dress')renderDress(g); else renderPeople(g);
+    }
+    function renderScoreBar(g){els.scoreBar.innerHTML=g.students.map(s=>{const ind=s.individualGrades||{};const groupTotal=groupSubtotal(g,s);const individual=num(ind.EffortScore)+num(ind.ProfessionalismScore)+num(ind.ExtraCreditScore);const total=(groupTotal*.75)+((num(ind.EffortScore)+num(ind.ProfessionalismScore))*.25)+num(ind.ExtraCreditScore);return `<div class="score-chip"><strong>${esc(s.preferredFirst||s.name)}</strong><span>Individual ${fmt(individual)} · Group ${fmt(groupTotal)}</span><span>Running ${fmt(total)}/100</span></div>`}).join('');}
+    function renderDress(g){els.dressTab.innerHTML=`<section class="visual-panel">${carouselHtml(g)}<h3 style="margin-top:1rem">Program Blurb</h3><div class="blurb-box">${esc((g.showNightData&&g.showNightData.blurb)||'No blurb submitted.')}</div></section><section class="scoring-panel">${groupScoreSection('Outfit Quality','OutfitQuality',g)}${groupScoreSection('Metaphor','Metaphor',g)}</section>`;bindCarousel(g);bindGroupSaves(g);bindOverrideButtons(g);}
+    function carouselHtml(g){const photos=(g.showNightData&&g.showNightData.photos)||[];if(!photos.length)return `<div class="carousel"><div class="carousel-placeholder"><i class="ti ti-camera-off"></i><p>No photos submitted</p></div></div>`;const p=photos[state.photoIndex%photos.length];return `<div class="carousel"><button class="carousel-nav prev" data-photo-step="-1"><i class="ti ti-chevron-left"></i></button><img data-lightbox-src="${escAttr(driveThumbUrl(p.url,1600)||'')}" src="${escAttr(driveThumbUrl(p.url,800)||'')}" alt="${escAttr(p.label)}"><button class="carousel-nav next" data-photo-step="1"><i class="ti ti-chevron-right"></i></button><span class="carousel-label">${esc(p.label)} ${state.photoIndex+1}/${photos.length}</span></div>`;}
+    function groupScoreSection(label,key,g){const rubric=state.rubric[label]||{maxPoints:'',criteria:[]};const gg=g.groupGrades||{};return `<section class="score-section" data-group-section="${key}"><div class="section-head"><div><p class="eyebrow">Group grade</p><h3>${esc(label)} <span class="score-pill">/${esc(rubric.maxPoints||'')}</span></h3></div></div>${criteriaHtml(rubric)}<div class="score-row"><label>Score<input class="input" type="number" min="0" max="${escAttr(rubric.maxPoints||100)}" step="any" data-field="${key}Score" value="${escAttr(gg[key+'Score']||'')}"></label><label>Comment<textarea data-field="${key}Comment">${esc(gg[key+'Comment']||'')}</textarea></label><button class="primary-btn" data-save-group="${key}" type="button"><i class="ti ti-device-floppy"></i> Save</button></div><div class="student-grid">${g.students.map(s=>overrideHtml(s,g,key,label)).join('')}</div></section>`;}
+    function renderPeople(g){els.peopleTab.innerHTML=`<section class="shared-row">${groupScoreSection('Group Work','GroupWork',g)}</section><section class="student-grid">${g.students.map(s=>studentColumnHtml(s,g)).join('')}</section>`;bindGroupSaves(g);bindIndividualSaves(g);bindOverrideButtons(g);}
+    function studentColumnHtml(s,g){const ind=s.individualGrades||{};const peer=(g.studentPeerData&&g.studentPeerData[s.email])||null;return `<article class="student-column" data-email="${escAttr(s.email)}"><div class="student-head"><div><h4>${esc(s.name)}</h4><span class="period-badge">P${esc(g.period)}</span> <span class="score-pill">${fmt(num(ind.EffortScore)+num(ind.ProfessionalismScore)+num(ind.ExtraCreditScore))} pts</span></div><button class="icon-btn mail-btn" data-email-open="${escAttr(s.email)}" type="button" title="Preview email"><i class="ti ti-mail"></i></button></div><div class="peer-box">${peer?`<strong>${esc(peer.submitter)}</strong><p>${esc(peer.percent)}%</p><p>${esc(peer.justification)}</p>`:`<p class="muted"><i class="ti ti-user-off"></i> No peer data</p>`}</div>${individualSection('Effort and Initiative','Effort',s,g)}${individualSection('Professionalism','Professionalism',s,g,true)}${individualSection('Extra Credit','ExtraCredit',s,g)}</article>`;}
+    function individualSection(label,key,s,g,role){const rubric=state.rubric[label]||{maxPoints:'',criteria:[]};const ind=s.individualGrades||{};const scoreHeader=key+'Score';const commentHeader=key==='ExtraCredit'?'ExtraCreditNote':key+'Comment';return `<section class="score-section" data-ind-section="${key}"><div class="section-head"><h4>${esc(label)} <span class="score-pill">/${esc(rubric.maxPoints||'')}</span></h4></div>${role?roleSelect(ind.ShowNightRole):''}${criteriaHtml(rubric)}<label class="jump-label">Score<input class="input" type="number" min="0" max="${escAttr(rubric.maxPoints||100)}" step="any" data-ind-field="${scoreHeader}" value="${escAttr(ind[scoreHeader]||'')}"></label><label class="jump-label">${key==='ExtraCredit'?'Note':'Comment'}<textarea data-ind-field="${commentHeader}">${esc(ind[commentHeader]||'')}</textarea></label><button class="primary-btn" data-save-ind="${key}" type="button"><i class="ti ti-device-floppy"></i> Save</button></section>`;}
+    function roleSelect(value){const roles=['','Modeling','Blurb Creation','Music','Emcee','PowerPoint Creation','Post-presentation','Other'];return `<select class="role-select" data-ind-field="ShowNightRole">${roles.map(r=>`<option value="${escAttr(r)}" ${r===String(value||'')?'selected':''}>${esc(r||'Select role')}</option>`).join('')}</select>`;}
+    function overrideHtml(s,g,key,label){const ind=s.individualGrades||{};const gg=g.groupGrades||{};const inherited=gg[key+'Score']||'';const override=ind[key+'Override'];const active=override!==''&&override!==undefined&&override!==null;return `<div class="override-box" data-override-email="${escAttr(s.email)}" data-override-key="${key}"><strong>${esc(s.preferredFirst||s.name)}</strong><span class="override-pill ${active?'active':''}">${active?`${esc(override)} <s>${esc(inherited)}</s>`:`Inherits ${esc(inherited||'?')}`}</span><button class="icon-btn" data-toggle-override type="button"><i class="ti ti-pencil"></i></button>${active?`<button class="icon-btn" data-clear-override type="button"><i class="ti ti-x"></i></button>`:''}<div class="override-controls hidden"><input class="input" data-override-value type="number" max="${escAttr(inherited||0)}" value="${escAttr(active?override:'')}"><textarea data-override-note placeholder="Required note">${esc(ind[key+'OverrideNote']||'')}</textarea><div class="inline-error"></div><button class="secondary-btn" data-save-override type="button">Save override</button></div></div>`;}
+    function criteriaHtml(rubric){return `<div class="criteria-list">${(rubric.criteria||[]).map(c=>`<div class="criterion"><strong>${esc(c.label)}</strong><p>${esc(c.text)}</p></div>`).join('')}</div>`;}
+    function bindCarousel(g){document.querySelectorAll('[data-photo-step]').forEach(btn=>btn.addEventListener('click',()=>{const len=(g.showNightData.photos||[]).length;state.photoIndex=(state.photoIndex+Number(btn.dataset.photoStep)+len)%len;renderDress(g);}));document.querySelectorAll('[data-lightbox-src]').forEach(img=>img.addEventListener('click',()=>openLightbox(img.dataset.lightboxSrc)));}
+    function bindGroupSaves(g){document.querySelectorAll('[data-save-group]').forEach(btn=>btn.addEventListener('click',()=>saveGroup(btn.dataset.saveGroup,g)));}
+    function bindIndividualSaves(g){document.querySelectorAll('[data-save-ind]').forEach(btn=>btn.addEventListener('click',()=>saveIndividual(btn.closest('.student-column').dataset.email,btn.dataset.saveInd,g)));document.querySelectorAll('[data-email-open]').forEach(btn=>btn.addEventListener('click',()=>openEmail(btn.dataset.emailOpen)));}
+    function bindOverrideButtons(g){document.querySelectorAll('[data-toggle-override]').forEach(btn=>btn.addEventListener('click',()=>btn.closest('.override-box').querySelector('.override-controls').classList.toggle('hidden')));document.querySelectorAll('[data-clear-override]').forEach(btn=>btn.addEventListener('click',()=>clearOverride(btn.closest('.override-box'),g)));document.querySelectorAll('[data-save-override]').forEach(btn=>btn.addEventListener('click',()=>saveOverride(btn.closest('.override-box'),g)));}
+    async function saveGroup(key,g){try{setSaveState('Saving','saving');const section=document.querySelector(`[data-group-section="${key}"]`);const payload={action:'saveGroupGrades',groupKey:g.groupKey,period:g.period,country:g.country};section.querySelectorAll('[data-field]').forEach(el=>payload[el.dataset.field]=el.value);validateScore(section.querySelector(`[data-field="${key}Score"]`));const res=await apiPost(payload);replaceGroup(res.group);setSaveState('Saved');toast(`${key.replace(/([A-Z])/g,' $1').trim()} saved.`);}catch(err){showError(err.message);}}
+    async function saveIndividual(email,key,g){try{setSaveState('Saving','saving');const col=document.querySelector(`[data-email="${cssEscape(email)}"]`);const student=g.students.find(s=>s.email===email);const payload={action:'saveIndividualGrades',email,StudentName:student.name,Period:g.period,Country:g.country};col.querySelectorAll(`[data-ind-section="${key}"] [data-ind-field]`).forEach(el=>payload[el.dataset.indField]=el.value);validateScore(col.querySelector(`[data-ind-section="${key}"] input[type="number"]`));const res=await apiPost(payload);replaceGroup(res.group);setSaveState('Saved');toast(`${student.preferredFirst||student.name} saved.`);}catch(err){showError(err.message);}}
+    async function saveOverride(box,g){try{const key=box.dataset.overrideKey;const email=box.dataset.overrideEmail;const inherited=num((g.groupGrades||{})[key+'Score']);const value=box.querySelector('[data-override-value]').value;const note=box.querySelector('[data-override-note]').value.trim();const err=box.querySelector('.inline-error');err.textContent='';if(value===''||num(value)>inherited){err.textContent='Override must be no higher than the group score.';return;}if(!note){err.textContent='Override note is required.';return;}const student=g.students.find(s=>s.email===email);setSaveState('Saving','saving');const payload={action:'saveIndividualGrades',email,StudentName:student.name,Period:g.period,Country:g.country};payload[key+'Override']=value;payload[key+'OverrideNote']=note;const res=await apiPost(payload);replaceGroup(res.group);setSaveState('Saved');toast('Override saved.');}catch(error){showError(error.message);}}
+    async function clearOverride(box,g){const key=box.dataset.overrideKey,email=box.dataset.overrideEmail,student=g.students.find(s=>s.email===email);setSaveState('Saving','saving');try{const payload={action:'saveIndividualGrades',email,StudentName:student.name,Period:g.period,Country:g.country};payload[key+'Override']='';payload[key+'OverrideNote']='';const res=await apiPost(payload);replaceGroup(res.group);setSaveState('Saved');toast('Override cleared.');}catch(err){showError(err.message);}}
+    function replaceGroup(group){const idx=state.groups.findIndex(g=>g.groupKey===group.groupKey);if(idx>=0)state.groups[idx]=group;state.selectedGroup=group;renderShell(summarizeVisible());renderSelectedGroup();}
+    async function openEmail(email){state.emailDraft={email,alreadySent:false};els.emailTo.textContent='Loading...';els.emailWarning.classList.add('hidden');els.emailPreview.srcdoc='<p style="font-family:sans-serif;padding:2rem;">Loading preview...</p>';els.emailModal.classList.remove('hidden');try{const res=await apiGet('getRubricEmailPreview',{email,signoff:els.emailSignoff.value});els.emailTo.textContent=res.to||email;els.emailPreview.srcdoc=res.html||res.htmlContent||'';state.emailDraft.alreadySent=!!res.emailAlreadySent;if(res.emailAlreadySent){els.emailWarning.textContent=`Already sent on ${res.emailSentAt || 'a previous date'}. Click Send again only if you intend to resend.`;els.emailWarning.classList.remove('hidden');}}catch(err){showError(err.message);closeEmail();}}
+    async function sendEmail(){if(!state.emailDraft)return;try{const already=state.emailDraft.alreadySent;if(already&&!confirm('This student already received an email. Send again?'))return;setSaveState('Saving','saving');const res=await apiPost({action:'sendRubricEmail',email:state.emailDraft.email,confirmed:true,force:already,dryRun:els.emailDryRun.checked,testMode:els.emailTestMode.checked,signoff:els.emailSignoff.value});toast(res.dryRun?'Dry run logged.':`Email sent to ${res.to}`);closeEmail();setSaveState('Saved');await loadAppData();}catch(err){showError(err.message);}}
+    async function openMessageCenter(){els.messageCenterModal.classList.remove('hidden');els.mcStatus.textContent='Loading...';try{const res=await apiGet('getGradeRollup');state.rollup=res.rows||[];renderMessageCenter();}catch(err){showError(err.message);}}
+    function renderMessageCenter(){const rows=filteredRollup();els.mcStatus.textContent=`${state.mcSelected.size} selected`;els.mcList.innerHTML=rows.map(r=>`<div class="mc-row ${state.mcActive===r.Email?'active':''}"><input type="checkbox" data-mc-check="${escAttr(r.Email)}" ${state.mcSelected.has(r.Email)?'checked':''}><button class="text-btn" data-mc-preview="${escAttr(r.Email)}" type="button" style="justify-content:flex-start"><span>${esc(r.StudentName)}<br><small class="muted">${esc(r.Country)} · P${esc(r.Period)}</small></span></button><span>${fmt(r.FinalScore)}/100</span></div>`).join('');els.mcList.querySelectorAll('[data-mc-check]').forEach(ch=>ch.addEventListener('change',()=>{ch.checked?state.mcSelected.add(ch.dataset.mcCheck):state.mcSelected.delete(ch.dataset.mcCheck);renderMessageCenter();}));els.mcList.querySelectorAll('[data-mc-preview]').forEach(btn=>btn.addEventListener('click',()=>previewMessage(btn.dataset.mcPreview)));}
+    function filteredRollup(){return state.rollup.filter(r=>(els.mcShowIncomplete.checked||r.FinalScore!=='')&&(els.mcIncludeSent.checked||!truthy(r.EmailSent)));}
+    async function previewMessage(email){state.mcActive=email;renderMessageCenter();els.mcPreviewName.textContent='Loading preview...';try{const res=await apiGet('getRubricEmailPreview',{email,signoff:els.mcSignoff.value});els.mcPreviewName.textContent=res.subject;els.mcPreview.srcdoc=res.html||res.htmlContent||'';}catch(err){showError(err.message);}}
+    function selectMessages(mode){state.mcSelected.clear();state.rollup.forEach(r=>{const complete=r.FinalScore!=='';if(mode==='eligible'&&complete)state.mcSelected.add(r.Email);if(mode==='unsent'&&complete&&!truthy(r.EmailSent))state.mcSelected.add(r.Email);});renderMessageCenter();}
+    async function sendMessageTest(){const email=state.mcActive||[...state.mcSelected][0]||(state.rollup.find(r=>r.FinalScore!=='')||{}).Email;if(!email)return toast('No completed student available.');try{const res=await apiPost({action:'sendRubricEmail',email,confirmed:true,dryRun:els.mcDryRun.checked,testMode:true,signoff:els.mcSignoff.value});toast(res.dryRun?'Test dry run logged.':`Test sent to ${res.to}`);}catch(err){showError(err.message);}}
+    async function sendMessageBatch(){const emails=[...state.mcSelected];if(!emails.length)return toast('Select at least one student.');if(!confirm(`Batch send ${emails.length} email(s)? Dry run: ${els.mcDryRun.checked ? 'yes' : 'no'}.`))return;try{const res=await apiPost({action:'batchSendEmails',emails,confirmed:true,force:els.mcIncludeSent.checked,dryRun:els.mcDryRun.checked,testMode:false,signoff:els.mcSignoff.value});toast(`Batch complete: ${res.sentCount} processed.`);await openMessageCenter();}catch(err){showError(err.message);}}
+    async function openSchoology(){els.schoologyModal.classList.remove('hidden');try{const res=await apiGet('getGradeRollup');state.rollup=res.rows||[];renderSchoology();}catch(err){showError(err.message);}}
+    function renderSchoology(){const rows=state.rollup.filter(r=>state.schoologyPeriod==='All'||String(r.Period)===state.schoologyPeriod);els.schoologyList.innerHTML=rows.map(r=>`<div class="schoology-row"><strong>${esc(r.StudentName)}</strong><span>${fmt(r.FinalScore)}</span><span>${r.FinalPercent===''?'':Math.round(Number(r.FinalPercent)*100)+'%'}</span><span>${truthy(r.EmailSent)?'Sent':'Unsent'}</span></div>`).join('')||'<p class="muted">No rows.</p>';}
+    async function setupSheets(){if(!confirm('Create headers in empty grading tabs? Existing headers will be left alone.'))return;try{const res=await apiGet('setupSheets');toast(res.results.map(r=>`${r.sheet}: ${r.action}`).join(' · '));await loadAppData();}catch(err){showError(err.message);}}
+    function moveGroup(dir){const idx=state.groups.findIndex(g=>g.groupKey===state.selectedGroupKey);const next=state.groups[Math.min(Math.max(idx+dir,0),state.groups.length-1)];if(next)selectGroup(next.groupKey);}
+    function selectNextUngraded(){const idx=Math.max(0,state.groups.findIndex(g=>g.groupKey===state.selectedGroupKey));const ordered=state.groups.slice(idx+1).concat(state.groups.slice(0,idx+1));const next=ordered.find(g=>g.status!=='Complete');next?selectGroup(next.groupKey):toast('All visible groups are complete.');}
+    function groupSubtotal(g,s){const gg=g.groupGrades||{},ind=s.individualGrades||{};return finalScore(ind.GroupWorkOverride,gg.GroupWorkScore)+finalScore(ind.OutfitQualityOverride,gg.OutfitQualityScore)+finalScore(ind.MetaphorOverride,gg.MetaphorScore);}
+    function finalScore(override,inherited){return override!==''&&override!==undefined&&override!==null?num(override):num(inherited);}
+    function summarizeVisible(){const total=state.groups.length,complete=state.groups.filter(g=>g.status==='Complete').length;return{total,complete,percent:total?Math.round(complete/total*100):0};}
+    function driveThumbUrl(openUrl,size=800){const match=String(openUrl||'').match(/[?&]id=([^&]+)/);return match?`https://drive.google.com/thumbnail?id=${match[1]}&sz=w${size}`:null;}
+    function validateScore(input){if(!input)return;const val=input.value;if(val==='')return;const n=Number(val),max=Number(input.max);if(!Number.isFinite(n)||n<0||n>max)throw new Error(`Score must be between 0 and ${max}.`);}
+    function openLightbox(src){if(!src)return;els.lightboxImg.src=src;els.lightbox.classList.remove('hidden');}function closeLightbox(){els.lightbox.classList.add('hidden');}
+    function closeEmail(){els.emailModal.classList.add('hidden');state.emailDraft=null;}function closeMessageCenter(){els.messageCenterModal.classList.add('hidden');}
+    function setSaveState(text,mode){els.saveState.className=`save-pill ${mode==='saving'?'saving':''} ${mode==='error'?'error':''}`;els.saveState.innerHTML=`<i class="ti ti-${mode==='error'?'alert-circle':mode==='saving'?'device-floppy':'check'}"></i> ${esc(text)}`;}
+    function showError(message){els.errorBox.textContent=message;els.errorBox.classList.remove('hidden');setSaveState('Error','error');}function clearError(){els.errorBox.classList.add('hidden');els.errorBox.textContent='';}
+    function toast(message){els.toast.textContent=message;els.toast.classList.remove('hidden');clearTimeout(toast.timer);toast.timer=setTimeout(()=>els.toast.classList.add('hidden'),3600);}
+    function applyTheme(theme){document.documentElement.setAttribute('data-theme',theme);localStorage.setItem(STORAGE.theme,theme);updateThemeControls();}function updateThemeControls(){const theme=document.documentElement.getAttribute('data-theme');document.querySelectorAll('[data-theme-option]').forEach(btn=>btn.classList.toggle('active',btn.dataset.themeOption===theme));}
+    function toggleSidebar(){const closed=document.documentElement.classList.toggle('sidebar-collapsed');localStorage.setItem(STORAGE.sidebar,String(!closed));}
+    function dismissSplash(){const s=document.getElementById('splashScreen');if(!s)return;s.classList.add('fade-out');setTimeout(()=>s.remove(),360);}
+    function statusClass(status){return `status-badge ${status==='Complete'?'complete':status==='In Progress'?'progress':''}`;}function truthy(v){return ['true','yes','1'].includes(String(v||'').toLowerCase());}
+    function num(v){const n=Number(v);return Number.isFinite(n)?n:0;}function fmt(v){return Number.isFinite(Number(v))?String(Math.round(Number(v)*100)/100):'';}
+    function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');}function escAttr(v){return esc(v).replace(/`/g,'&#096;');}
+    function cssEscape(value){return window.CSS&&CSS.escape?CSS.escape(value):String(value).replace(/"/g,'\\"');}
+  </script>
+</body>
+</html>
