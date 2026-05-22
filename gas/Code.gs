@@ -56,6 +56,7 @@ const CONFIG = {
     'GroupWorkOverride', 'GroupWorkOverrideNote',
     'OutfitQualityOverride', 'OutfitQualityOverrideNote',
     'MetaphorOverride', 'MetaphorOverrideNote',
+    'ManualScoreOverride', 'ManualScoreOverrideNote',
     'IndividualStatus', 'LastSavedAt',
     'EmailSent', 'EmailSentAt'
   ],
@@ -227,7 +228,9 @@ function saveIndividualGrades_(payload) {
     ['StudentName', 'Period', 'Country', 'EffortScore', 'EffortComment', 'ProfessionalismScore',
      'ProfessionalismComment', 'ShowNightRole', 'ExtraCreditScore', 'ExtraCreditNote',
      'GroupWorkOverride', 'GroupWorkOverrideNote', 'OutfitQualityOverride', 'OutfitQualityOverrideNote',
-     'MetaphorOverride', 'MetaphorOverrideNote', 'EmailSent', 'EmailSentAt'].forEach(header => {
+     'MetaphorOverride', 'MetaphorOverrideNote',
+     'ManualScoreOverride', 'ManualScoreOverrideNote',
+     'EmailSent', 'EmailSentAt'].forEach(header => {
       if (Object.prototype.hasOwnProperty.call(payload, header)) setCellByHeader_(sheet, headerMap, rowNumber, header, payload[header]);
     });
     const updated = objectFromRow_(sheet, rowNumber);
@@ -492,7 +495,9 @@ function computeRollupRows_() {
       const prof = numOrBlank_(ind.ProfessionalismScore);
       const extra = numOrZero_(ind.ExtraCreditScore);
       const individualTotal = sumNums_([effort, prof]);
-      const finalScore = blankIfIncomplete_([groupWork, outfit, metaphor, effort, prof], (groupTotal * 0.75) + (individualTotal * 0.25) + extra);
+      const calculatedScore = blankIfIncomplete_([groupWork, outfit, metaphor, effort, prof], (groupTotal * 0.75) + (individualTotal * 0.25) + extra);
+      const manualOverride = numOrBlank_(ind.ManualScoreOverride);
+      const finalScore = manualOverride !== '' ? manualOverride : calculatedScore;
       rows.push({
         Email: student.email,
         StudentName: student.name,
