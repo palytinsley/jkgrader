@@ -188,7 +188,8 @@ function saveGroupGrades_(payload) {
       if (Object.prototype.hasOwnProperty.call(payload, header)) setCellByHeader_(sheet, headerMap, rowNumber, header, payload[header]);
     });
     const allRows = readWorkbook_();
-    const status = computeGroupStatus_(groupKey, objectFromRow_(sheet, rowNumber), allRows.individualByEmail);
+    const rosterStudents = studentsForGroup_(allRows.roster, period, country);
+    const status = computeGroupStatus_(groupKey, objectFromRow_(sheet, rowNumber), allRows.individualByEmail, rosterStudents);
     setCellByHeader_(sheet, headerMap, rowNumber, 'GroupStatus', status);
     setCellByHeader_(sheet, headerMap, rowNumber, 'LastSavedAt', new Date().toISOString());
     return { ok: true, savedAt: new Date().toISOString(), group: getGroupDetails_({ groupKey }).group };
@@ -221,6 +222,7 @@ function saveIndividualGrades_(payload) {
     const updated = objectFromRow_(sheet, rowNumber);
     setCellByHeader_(sheet, headerMap, rowNumber, 'IndividualStatus', computeIndividualStatus_(updated));
     setCellByHeader_(sheet, headerMap, rowNumber, 'LastSavedAt', new Date().toISOString());
+    updateStoredGroupStatus_(String(payload.Period || updated.Period || '').trim(), String(payload.Country || updated.Country || '').trim());
     return { ok: true, savedAt: new Date().toISOString(), group: getGroupDetails_({ groupKey: `${payload.Period || updated.Period}|${payload.Country || updated.Country}` }).group };
   } catch (err) {
     logError_('saveIndividualGrades_', err, payload);
@@ -372,6 +374,28 @@ function buildGroups_(data, periodFilter) {
     });
     return group;
   });
+}
+
+function studentsForGroup_(rosterRows, period, country) {
+  return rosterRows.filter(row => {
+    return String(cleanPeriod_(row[CONFIG.ROSTER_HEADERS.PERIOD])) === String(period) &&
+      sameText_(row[CONFIG.ROSTER_HEADERS.COUNTRY], country);
+  }).map(row => ({ email: stringOrBlank_(row[CONFIG.ROSTER_HEADERS.EMAIL]) })).filter(student => student.email);
+}
+
+function updateStoredGroupStatus_(period, country) {
+  if (!period || !country) return;
+  const ss = getSpreadsheet_();
+  const groupSheet = getRequiredSheet_(ss, CONFIG.SHEETS.GROUP_GRADES);
+  requireHeaders_(groupSheet, CONFIG.GROUP_GRADE_HEADERS);
+  const groupKey = `${cleanPeriod_(period)}|${country}`;
+  const data = readWorkbook_();
+  const groupRow = data.groupByKey[groupKey];
+  if (!groupRow) return;
+  const rowNumber = findOrCreateRow_(groupSheet, 'GroupKey', groupKey);
+  const headerMap = getHeaderMap_(groupSheet);
+  const rosterStudents = studentsForGroup_(data.roster, cleanPeriod_(period), country);
+  setCellByHeader_(groupSheet, headerMap, rowNumber, 'GroupStatus', computeGroupStatus_(groupKey, groupRow, data.individualByEmail, rosterStudents));
 }
 
 function findShowNight_(rows, period, country) {
