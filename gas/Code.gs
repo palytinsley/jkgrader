@@ -21,7 +21,8 @@ const CONFIG = {
     PHOTO_2: 'Upload 2: Front photo',
     PHOTO_3: 'Upload 3: Side photo',
     PHOTO_4: 'Upload 4: Back Photo',
-    BLURB: 'Program Blurb Paragraph'
+    BLURB: 'Program Blurb Paragraph',
+    SCRIPT_BLURB: 'Script Blurb'
   },
   PEER_HEADERS: {
     SUBMITTER: 'SubmitterName',
@@ -429,7 +430,8 @@ function findShowNight_(rows, period, country) {
       { label: 'Side', url: match[CONFIG.SHOW_NIGHT_HEADERS.PHOTO_3] || '' },
       { label: 'Back', url: match[CONFIG.SHOW_NIGHT_HEADERS.PHOTO_4] || '' }
     ].filter(photo => String(photo.url || '').trim()),
-    blurb: match[CONFIG.SHOW_NIGHT_HEADERS.BLURB] || ''
+    blurb: match[CONFIG.SHOW_NIGHT_HEADERS.BLURB] || '',
+    scriptBlurb: match[CONFIG.SHOW_NIGHT_HEADERS.SCRIPT_BLURB] || ''
   };
 }
 
