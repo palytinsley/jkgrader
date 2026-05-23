@@ -342,9 +342,13 @@ function getMissingData_() {
     String(a.name).localeCompare(String(b.name)));
 
   missingShowNight.forEach(group => {
-    group.students.forEach(student => student.lastNotifiedAt = notificationIndex[String(student.email || '').toLowerCase()] || '');
+    group.students.forEach(student => {
+      student.lastNotifiedAt = notificationIndex.showNight[String(student.email || '').toLowerCase()] || '';
+    });
   });
-  missingPeerGrade.forEach(student => student.lastNotifiedAt = notificationIndex[String(student.email || '').toLowerCase()] || '');
+  missingPeerGrade.forEach(student => {
+    student.lastNotifiedAt = notificationIndex.peerGrade[String(student.email || '').toLowerCase()] || '';
+  });
 
   return { ok: true, missingShowNight, missingPeerGrade };
 }
@@ -435,14 +439,20 @@ function appendMissingNotificationLog_(recipient, scenario, subject, dryRun, tes
 }
 
 function buildNotificationLogIndex_(rows) {
-  const index = {};
+  // Returns { showNight: { email: latestSentAt }, peerGrade: { email: latestSentAt } }
+  const index = { showNight: {}, peerGrade: {} };
   (rows || []).forEach(row => {
     const email = stringOrBlank_(row.Email).toLowerCase();
     if (!email) return;
     if (String(row.DryRun).toLowerCase() !== 'false' || String(row.TestMode).toLowerCase() !== 'false') return;
     const sentAt = normalizeLogSentAt_(row.SentAt);
     if (!sentAt) return;
-    if (!index[email] || new Date(sentAt).getTime() > new Date(index[email]).getTime()) index[email] = sentAt;
+    const scenario = stringOrBlank_(row.Scenario);
+    if (scenario !== 'showNight' && scenario !== 'peerGrade') return;
+    const bucket = index[scenario];
+    if (!bucket[email] || new Date(sentAt).getTime() > new Date(bucket[email]).getTime()) {
+      bucket[email] = sentAt;
+    }
   });
   return index;
 }
