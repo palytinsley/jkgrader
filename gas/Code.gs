@@ -9,6 +9,7 @@ const CONFIG = {
     INDIVIDUAL: 'Individual Grades',
     REFLECTIONS: 'Reflection Links',
     ROLLUP: 'Grade Rollup',
+    NOTIFICATION_LOG: 'Notification Log',
     RUBRIC_CONFIG: 'Rubric Config'
   },
   SHOW_NIGHT_HEADERS: {
@@ -72,6 +73,9 @@ const CONFIG = {
     'IndividualTotal', 'FinalScore', 'FinalPercent',
     'EmailSent', 'EmailSentAt'
   ],
+  NOTIFICATION_LOG_HEADERS: [
+    'Email', 'StudentName', 'Scenario', 'SentAt', 'DryRun', 'TestMode', 'Subject'
+  ],
   TEST_EMAIL_RECIPIENT: 'ktinsley@pausd.org',
   DEFAULT_SIGNOFF: 'Mr. Tinsley',
   MISSING_NOTIFICATIONS: {
@@ -100,8 +104,9 @@ function doGet(e) {
     else if (action === 'getGradeRollup') payload = getGradeRollup_();
     else if (action === 'getRubricEmailPreview') payload = getRubricEmailPreview_(e.parameter || {});
     else if (action === 'getMissingData') payload = getMissingData_();
+    else if (action === 'getNotificationLog') payload = getNotificationLog_();
     else if (action === 'setupSheets') payload = setupSheets_();
-    else payload = { ok: true, message: 'JK Show and Dress Grader API', actions: ['getAppData', 'getGroupDetails', 'getRubricConfig', 'getGradeRollup', 'getRubricEmailPreview', 'getMissingData', 'setupSheets'] };
+    else payload = { ok: true, message: 'JK Show and Dress Grader API', actions: ['getAppData', 'getGroupDetails', 'getRubricConfig', 'getGradeRollup', 'getRubricEmailPreview', 'getMissingData', 'getNotificationLog', 'setupSheets'] };
     return jsonResponse_(payload);
   } catch (err) {
     logError_('doGet', err, e && e.parameter);
@@ -311,6 +316,7 @@ function getMissingData_() {
   const missingShowNight = [];
   const missingPeerGrade = [];
   const seenPeerEmails = {};
+  const notificationIndex = buildNotificationLogIndex_(data.notificationLog);
 
   groups.forEach(group => {
     if (!findShowNight_(data.showNight, group.period, group.country)) {
@@ -335,7 +341,17 @@ function getMissingData_() {
   missingPeerGrade.sort((a, b) => String(a.period).localeCompare(String(b.period), undefined, { numeric: true }) ||
     String(a.name).localeCompare(String(b.name)));
 
+  missingShowNight.forEach(group => {
+    group.students.forEach(student => student.lastNotifiedAt = notificationIndex[String(student.email || '').toLowerCase()] || '');
+  });
+  missingPeerGrade.forEach(student => student.lastNotifiedAt = notificationIndex[String(student.email || '').toLowerCase()] || '');
+
   return { ok: true, missingShowNight, missingPeerGrade };
+}
+
+function getNotificationLog_() {
+  const sheet = getNotificationLogSheet_(getSpreadsheet_());
+  return { ok: true, rows: sheet ? tabToObjects_(sheet) : [] };
 }
 
 function missingRecipientFromStudent_(student, group) {
@@ -374,6 +390,9 @@ function sendMissingNotifications_(payload) {
       } else {
         GmailApp.sendEmail(to, mergedSubject, mergedBody);
       }
+      if (!dryRun) {
+        appendMissingNotificationLog_(recipient, scenario, mergedSubject, dryRun, testMode);
+      }
       results.push({ email, to, ok: true, dryRun, testMode });
     } catch (err) {
       results.push({ email, to, ok: false, dryRun, testMode, message: err && err.message ? err.message : String(err) });
@@ -391,6 +410,47 @@ function mergeMissingTemplate_(template, recipient, signoff) {
     teacherSignoff: signoff || CONFIG.DEFAULT_SIGNOFF
   };
   return String(template || '').replace(/\{\{(firstName|country|period|teacherSignoff)\}\}/g, (match, key) => values[key]);
+}
+
+function appendMissingNotificationLog_(recipient, scenario, subject, dryRun, testMode) {
+  try {
+    const ss = getSpreadsheet_();
+    const sheet = getNotificationLogSheet_(ss) || ss.insertSheet(CONFIG.SHEETS.NOTIFICATION_LOG);
+    const firstRow = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0].join('').trim();
+    if (!firstRow) {
+      sheet.getRange(1, 1, 1, CONFIG.NOTIFICATION_LOG_HEADERS.length).setValues([CONFIG.NOTIFICATION_LOG_HEADERS]);
+    }
+    sheet.appendRow([
+      stringOrBlank_(recipient.email),
+      stringOrBlank_(recipient.name || recipient.firstName || ''),
+      scenario,
+      new Date().toISOString(),
+      String(!!dryRun),
+      String(!!testMode),
+      subject
+    ]);
+  } catch (err) {
+    Logger.log('Notification log write failed for %s: %s', recipient && recipient.email, err && err.message ? err.message : err);
+  }
+}
+
+function buildNotificationLogIndex_(rows) {
+  const index = {};
+  (rows || []).forEach(row => {
+    const email = stringOrBlank_(row.Email).toLowerCase();
+    if (!email) return;
+    if (String(row.DryRun).toLowerCase() !== 'false' || String(row.TestMode).toLowerCase() !== 'false') return;
+    const sentAt = normalizeLogSentAt_(row.SentAt);
+    if (!sentAt) return;
+    if (!index[email] || new Date(sentAt).getTime() > new Date(index[email]).getTime()) index[email] = sentAt;
+  });
+  return index;
+}
+
+function normalizeLogSentAt_(value) {
+  if (!value) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]') return value.toISOString();
+  return String(value);
 }
 
 function updateGradeRollup_() {
@@ -422,7 +482,8 @@ function setupSheets_() {
     { name: CONFIG.SHEETS.GROUP_GRADES, headers: CONFIG.GROUP_GRADE_HEADERS },
     { name: CONFIG.SHEETS.INDIVIDUAL, headers: CONFIG.INDIVIDUAL_HEADERS },
     { name: CONFIG.SHEETS.REFLECTIONS, headers: CONFIG.REFLECTION_HEADERS },
-    { name: CONFIG.SHEETS.ROLLUP, headers: CONFIG.ROLLUP_HEADERS }
+    { name: CONFIG.SHEETS.ROLLUP, headers: CONFIG.ROLLUP_HEADERS },
+    { name: CONFIG.SHEETS.NOTIFICATION_LOG, headers: CONFIG.NOTIFICATION_LOG_HEADERS }
   ];
   const results = specs.map(spec => {
     const sheet = ss.getSheetByName(spec.name) || ss.insertSheet(spec.name);
@@ -448,6 +509,8 @@ function readWorkbook_() {
   const showNight = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.SHOW_NIGHT));
   const peerResponses = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.PEER_GRADES));
   const reflections = tabToObjects_(getRequiredSheet_(ss, CONFIG.SHEETS.REFLECTIONS));
+  const notificationLogSheet = getNotificationLogSheet_(ss);
+  const notificationLog = notificationLogSheet ? tabToObjects_(notificationLogSheet) : [];
   return {
     ss,
     roster,
@@ -456,6 +519,7 @@ function readWorkbook_() {
     showNight,
     peerResponses,
     reflections,
+    notificationLog,
     groupByKey: indexBy_(groupGrades, 'GroupKey'),
     individualByEmail: indexBy_(individualGrades, 'Email')
   };
@@ -762,6 +826,10 @@ function getRequiredSheet_(ss, name) {
   const sheet = ss.getSheetByName(name);
   if (!sheet) throw new Error('Missing sheet: ' + name);
   return sheet;
+}
+
+function getNotificationLogSheet_(ss) {
+  return ss.getSheetByName(CONFIG.SHEETS.NOTIFICATION_LOG) || null;
 }
 
 function tabToObjects_(sheet) {

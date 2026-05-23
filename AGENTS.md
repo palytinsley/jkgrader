@@ -78,8 +78,16 @@ Added in: 2026-05-23
   - TODO when activating: build `getMissingReflections_()`, add `missingReflection` array to `getMissingData_()` response, enable the tab in the frontend, add a `reflection` key to `msState.templates`, and confirm Schoology link + default template copy with Mr. Tinsley.
 
 ### GAS functions
-- `getMissingData_()` — reads workbook, returns `missingShowNight` and `missingPeerGrade` arrays
-- `sendMissingNotifications_(payload)` — server-side merge + GmailApp send, requires `confirmed: true`
+- `getMissingData_()` — reads workbook (including `notificationLog`), returns `missingShowNight` and `missingPeerGrade` arrays, each recipient includes `lastNotifiedAt`
+- `sendMissingNotifications_(payload)` — server-side merge + GmailApp send, requires `confirmed: true`, appends to `Notification Log` on successful non-dry-run sends
+- `getNotificationLog_()` — returns all rows from `Notification Log` sheet
+- `mergeMissingTemplate_()` — merge helper
+- `missingRecipientFromStudent_()` — recipient shape helper
+
+### Future iterations (not built — noted for next year)
+- **Parent/guardian CC**: would require a parent email column in the `Roster` sheet. Not worth the lift for a one-off project.
+- **Automatic scheduling / triggers**: send reminders N days before due date automatically. Overkill for JK.
+- **Preview merge before send**: a "Preview for…" dropdown in the template pane that renders the fully merged subject + body for a selected recipient. Nice UX but optional.
 
 ### Frontend
 - Modal ID: `missingSubmissionsModal`
