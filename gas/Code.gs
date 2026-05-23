@@ -105,8 +105,9 @@ function doGet(e) {
     else if (action === 'getRubricEmailPreview') payload = getRubricEmailPreview_(e.parameter || {});
     else if (action === 'getMissingData') payload = getMissingData_();
     else if (action === 'getNotificationLog') payload = getNotificationLog_();
+    else if (action === 'debugPeerMatch') payload = debugPeerMatch_(e.parameter || {});
     else if (action === 'setupSheets') payload = setupSheets_();
-    else payload = { ok: true, message: 'JK Show and Dress Grader API', actions: ['getAppData', 'getGroupDetails', 'getRubricConfig', 'getGradeRollup', 'getRubricEmailPreview', 'getMissingData', 'getNotificationLog', 'setupSheets'] };
+    else payload = { ok: true, message: 'JK Show and Dress Grader API', actions: ['getAppData', 'getGroupDetails', 'getRubricConfig', 'getGradeRollup', 'getRubricEmailPreview', 'getMissingData', 'getNotificationLog', 'debugPeerMatch', 'setupSheets'] };
     return jsonResponse_(payload);
   } catch (err) {
     logError_('doGet', err, e && e.parameter);
@@ -164,6 +165,33 @@ function getGroupDetails_(params) {
   const group = buildGroups_(data, 'All').find(item => item.groupKey === groupKey);
   if (!group) throw new Error('Group not found: ' + groupKey);
   return { ok: true, group, rubric: getRubricConfig_() };
+}
+
+function debugPeerMatch_(params) {
+  const groupKey = String(params.groupKey || '').trim();
+  if (!groupKey) throw new Error('Missing groupKey.');
+  const data = readWorkbook_();
+  const group = buildGroups_(data, 'All').find(item => item.groupKey === groupKey);
+  if (!group) throw new Error('Group not found: ' + groupKey);
+  const inputNames = [];
+  group.peerResponses.forEach(row => {
+    inputNames.push(row[CONFIG.PEER_HEADERS.SUBMITTER] || '');
+    for (let n = 1; n <= 4; n++) inputNames.push(row[`Peer${n}Name`] || '');
+  });
+  return group.students.map(student => {
+    const peer = findPeerForStudent_(group.peerResponses, student);
+    const submitterText = peer && peer.submitter ? peer.submitter : '';
+    return {
+      studentName: student.name,
+      submitterFound: Boolean(submitterText),
+      submitterText,
+      receivedCount: peer && peer.receivedGrades ? peer.receivedGrades.length : 0,
+      matchCandidates: inputNames.filter(name => String(name || '').trim()).map(name => ({
+        inputName: String(name || '').trim(),
+        confidence: fuzzyNameMatch_(name, student)
+      }))
+    };
+  });
 }
 
 function getGradeRollup_() {
@@ -604,16 +632,8 @@ function findShowNight_(rows, period, country) {
 }
 
 function findPeerForStudent_(responses, student) {
-  const first = normalizeName_(student.preferredFirst);
-  const last = normalizeName_(student.lastName);
-  const full = normalizeName_(`${student.preferredFirst} ${student.lastName}`);
-
   function isStudentMatch(name) {
-    const norm = normalizeName_(name);
-    if (!norm) return false;
-    return norm === first || norm === last || norm === full ||
-      (first && norm.indexOf(first) >= 0) ||
-      (last && norm.indexOf(last) >= 0);
+    return fuzzyNameMatch_(name, student) >= 1;
   }
 
   let submissionRow = null;
@@ -1083,6 +1103,48 @@ function normalizeName_(value) {
   return stringOrBlank_(value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function fuzzyNameMatch_(inputName, student) {
+  const norm = normalizeName_(inputName);
+  if (!norm) return 0;
+
+  const first = normalizeName_(student.preferredFirst);
+  const legalFirst = normalizeName_(student.legalFirst);
+  const last = normalizeName_(student.lastName);
+  const full = normalizeName_(`${student.preferredFirst || student.legalFirst} ${student.lastName}`);
+  const candidates = [full, first, last, legalFirst].filter(Boolean);
+
+  for (let i = 0; i < candidates.length; i++) {
+    if (norm === candidates[i]) return 2;
+  }
+  if (last.length >= 3 && norm.indexOf(last) >= 0) return 2;
+  if (first.length >= 3 && norm.indexOf(first) >= 0) return 2;
+  if (legalFirst.length >= 3 && norm.indexOf(legalFirst) >= 0) return 2;
+
+  const tokens = norm.split(/\s+/).filter(Boolean);
+  const firstCandidates = [first, legalFirst].filter(Boolean);
+  if (tokens.length === 2 && last) {
+    const left = tokens[0];
+    const right = tokens[1];
+    for (let i = 0; i < firstCandidates.length; i++) {
+      const candidateFirst = firstCandidates[i];
+      if (left.length === 1 && candidateFirst.charAt(0) === left && right === last) return 1;
+      if (right.length === 1 && last.charAt(0) === right && left === candidateFirst) return 1;
+    }
+  }
+
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i];
+    if (candidate.length >= 4 && levenshtein_(norm, candidate) <= 1) return 1;
+  }
+
+  for (let i = 0; i < firstCandidates.length; i++) {
+    const candidateFirst = firstCandidates[i];
+    if (norm.length >= 4 && candidateFirst.indexOf(norm) === 0) return 1;
+  }
+
+  return 0;
+}
+
 function sortGroupKeys_(a, b) {
   const ap = a.split('|')[0], bp = b.split('|')[0];
   if (Number(ap) !== Number(bp)) return Number(ap) - Number(bp);
@@ -1155,4 +1217,26 @@ function escapeHtmlEmail_(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function levenshtein_(a, b) {
+  a = String(a || '');
+  b = String(b || '');
+  const rows = [];
+  for (let i = 0; i <= a.length; i++) {
+    rows[i] = [];
+    rows[i][0] = i;
+  }
+  for (let j = 0; j <= b.length; j++) rows[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
+      rows[i][j] = Math.min(
+        rows[i - 1][j] + 1,
+        rows[i][j - 1] + 1,
+        rows[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return rows[a.length][b.length];
 }
