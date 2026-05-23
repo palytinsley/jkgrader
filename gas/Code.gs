@@ -74,6 +74,10 @@ const CONFIG = {
   ],
   TEST_EMAIL_RECIPIENT: 'ktinsley@pausd.org',
   DEFAULT_SIGNOFF: 'Mr. Tinsley',
+  MISSING_NOTIFICATIONS: {
+    SHOW_NIGHT_FORM: 'https://pausd.schoology.com/assignment/8394739250/info',
+    PEER_GRADE_FORM: 'https://pausd.schoology.com/assignment/8388064044/info'
+  },
   STATUS: {
     UNGRADED: 'Ungraded',
     IN_PROGRESS: 'In Progress',
@@ -95,8 +99,9 @@ function doGet(e) {
     else if (action === 'getRubricConfig') payload = { ok: true, rubric: getRubricConfig_() };
     else if (action === 'getGradeRollup') payload = getGradeRollup_();
     else if (action === 'getRubricEmailPreview') payload = getRubricEmailPreview_(e.parameter || {});
+    else if (action === 'getMissingData') payload = getMissingData_();
     else if (action === 'setupSheets') payload = setupSheets_();
-    else payload = { ok: true, message: 'JK Show and Dress Grader API', actions: ['getAppData', 'getGroupDetails', 'getRubricConfig', 'getGradeRollup', 'getRubricEmailPreview', 'setupSheets'] };
+    else payload = { ok: true, message: 'JK Show and Dress Grader API', actions: ['getAppData', 'getGroupDetails', 'getRubricConfig', 'getGradeRollup', 'getRubricEmailPreview', 'getMissingData', 'setupSheets'] };
     return jsonResponse_(payload);
   } catch (err) {
     logError_('doGet', err, e && e.parameter);
@@ -113,8 +118,9 @@ function doPost(e) {
     else if (action === 'saveIndividualGrades') response = saveIndividualGrades_(payload);
     else if (action === 'sendRubricEmail') response = sendRubricEmail_(payload);
     else if (action === 'batchSendEmails') response = batchSendEmails_(payload);
+    else if (action === 'sendMissingNotifications') response = sendMissingNotifications_(payload);
     else if (action === 'updateGradeRollup') response = updateGradeRollup_();
-    else throw new Error('Unknown POST action: ' + action);
+    else throw new Error('Unknown POST action: ' + action + '. Expected one of: saveGroupGrades, saveIndividualGrades, sendRubricEmail, batchSendEmails, sendMissingNotifications, updateGradeRollup.');
     return jsonResponse_(response);
   } catch (err) {
     logError_('doPost', err, e && e.postData && e.postData.contents);
@@ -297,6 +303,94 @@ function batchSendEmails_(payload) {
     }
   });
   return { ok: true, results, sentCount: results.filter(item => item.ok).length };
+}
+
+function getMissingData_() {
+  const data = readWorkbook_();
+  const groups = buildGroups_(data, 'All');
+  const missingShowNight = [];
+  const missingPeerGrade = [];
+  const seenPeerEmails = {};
+
+  groups.forEach(group => {
+    if (!findShowNight_(data.showNight, group.period, group.country)) {
+      missingShowNight.push({
+        groupKey: group.groupKey,
+        period: String(group.period),
+        country: group.country,
+        students: group.students.map(student => missingRecipientFromStudent_(student, group))
+      });
+    }
+
+    group.students.forEach(student => {
+      if (seenPeerEmails[student.email]) return;
+      const peer = findPeerForStudent_(group.peerResponses, student);
+      if (!peer || !stringOrBlank_(peer.submitter)) {
+        missingPeerGrade.push(missingRecipientFromStudent_(student, group));
+        seenPeerEmails[student.email] = true;
+      }
+    });
+  });
+
+  missingPeerGrade.sort((a, b) => String(a.period).localeCompare(String(b.period), undefined, { numeric: true }) ||
+    String(a.name).localeCompare(String(b.name)));
+
+  return { ok: true, missingShowNight, missingPeerGrade };
+}
+
+function missingRecipientFromStudent_(student, group) {
+  return {
+    email: student.email,
+    name: student.name,
+    firstName: student.preferredFirst || student.legalFirst || student.name || '',
+    period: String(group.period),
+    country: group.country
+  };
+}
+
+function sendMissingNotifications_(payload) {
+  if (!payload.confirmed) throw new Error('Missing notification send requires confirmed=true.');
+  const scenario = String(payload.scenario || '').trim();
+  if (scenario !== 'showNight' && scenario !== 'peerGrade') throw new Error('Scenario must be showNight or peerGrade.');
+  const recipients = Array.isArray(payload.recipients) ? payload.recipients : [];
+  if (!recipients.length) throw new Error('No recipients selected.');
+
+  const subjectTemplate = String(payload.subjectTemplate || '');
+  const bodyTemplate = String(payload.bodyTemplate || '');
+  const signoff = payload.signoff || CONFIG.DEFAULT_SIGNOFF;
+  const dryRun = !!payload.dryRun;
+  const testMode = !!payload.testMode;
+  const results = [];
+
+  recipients.forEach(recipient => {
+    const email = stringOrBlank_(recipient.email);
+    const to = testMode ? CONFIG.TEST_EMAIL_RECIPIENT : email;
+    try {
+      if (!email) throw new Error('Recipient email is missing.');
+      const mergedSubject = mergeMissingTemplate_(subjectTemplate, recipient, signoff);
+      const mergedBody = mergeMissingTemplate_(bodyTemplate, recipient, signoff);
+      if (dryRun) {
+        Logger.log('sendMissingNotifications dryRun=true scenario=%s testMode=%s to=%s subject=%s', scenario, testMode, to, mergedSubject);
+      } else {
+        GmailApp.sendEmail(to, mergedSubject, mergedBody);
+      }
+      results.push({ email, to, ok: true, dryRun, testMode });
+    } catch (err) {
+      results.push({ email, to, ok: false, dryRun, testMode, message: err && err.message ? err.message : String(err) });
+    }
+  });
+
+  return { ok: true, results, sentCount: results.filter(item => item.ok && !item.dryRun).length };
+}
+
+function mergeMissingTemplate_(template, recipient, signoff) {
+  const values = {
+    firstName: recipient.firstName || '',
+    country: recipient.country || '',
+    period: recipient.period || '',
+    teacherSignoff: signoff || CONFIG.DEFAULT_SIGNOFF
+  };
+  return String(template || '').replace(/\{\{(firstName|country|period|teacherSignoff)\}\}/g, (match, key) => values[key]);
 }
 
 function updateGradeRollup_() {

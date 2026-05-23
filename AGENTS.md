@@ -60,3 +60,29 @@ Max Points is populated on the first row of a category block only. GAS must forw
 ### `Grade Rollup`
 
 `Email | StudentName | Period | Country | GroupWorkFinal | OutfitQualityFinal | MetaphorFinal | GroupTotal | EffortScore | ProfessionalismScore | ExtraCreditScore | IndividualTotal | FinalScore | FinalPercent | EmailSent | EmailSentAt`
+
+## Missing Submissions Notification Center
+
+Added in: 2026-05-23
+
+### Active scenarios
+- **Show Night Response** (`showNight`): Flags groups with no entry in `Show Night Resposnes`. Emails all students in that group.
+  - Schoology form link: https://pausd.schoology.com/assignment/8394739250/info
+  - Tone: Low-pressure. Acknowledge the night was hectic, not all photos may have been captured. Ask for at least 1 photo that best shows the model in full makeup with the dress on.
+- **Peer Grade** (`peerGrade`): Flags individual students with no matching submission in `peer-grade-responses`.
+  - Schoology form link: https://pausd.schoology.com/assignment/8388064044/info
+  - Tone: Generic/brief. We don't have a response from you; it would help assess participation and group work.
+
+### Stubbed scenario (not implemented this year)
+- **Reflection** (`reflection`): Tab is present in the UI but disabled. No GAS logic built.
+  - TODO when activating: build `getMissingReflections_()`, add `missingReflection` array to `getMissingData_()` response, enable the tab in the frontend, add a `reflection` key to `msState.templates`, and confirm Schoology link + default template copy with Mr. Tinsley.
+
+### GAS functions
+- `getMissingData_()` — reads workbook, returns `missingShowNight` and `missingPeerGrade` arrays
+- `sendMissingNotifications_(payload)` — server-side merge + GmailApp send, requires `confirmed: true`
+
+### Frontend
+- Modal ID: `missingSubmissionsModal`
+- State object: `msState` (tab, data, selected, templates)
+- localStorage key: `jkMissingTemplates`
+- Settings menu button ID: `missingSumbissionsBtn`
