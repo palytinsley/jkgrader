@@ -660,7 +660,6 @@ function findPeerForStudent_(responses, student) {
   const receivedGrades = [];
   for (let i = 0; i < responses.length; i++) {
     const row = responses[i];
-    if (isStudentMatch(row[CONFIG.PEER_HEADERS.SUBMITTER] || '')) continue;
     for (let n = 1; n <= 4; n++) {
       if (isStudentMatch(row[`Peer${n}Name`] || '')) {
         receivedGrades.push({
