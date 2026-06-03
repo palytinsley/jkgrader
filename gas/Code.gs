@@ -905,13 +905,13 @@ function findOrCreateRow_(sheet, keyCol, keyVal) {
 function findSingleExactRow_(sheet, headerMap, keyCol, keyVal) {
   const col = headerMap[keyCol];
   if (!col) throw new Error(`Missing key column ${keyCol} in ${sheet.getName()}.`);
-  const exactValue = String(keyVal || '').trim();
+  const exactValue = String(keyVal || '').trim().toLowerCase();
   const matches = [];
   const lastRow = sheet.getLastRow();
   if (lastRow > 1) {
     const values = sheet.getRange(2, col, lastRow - 1, 1).getValues();
     for (let i = 0; i < values.length; i++) {
-      if (String(values[i][0] || '').trim() === exactValue) matches.push(i + 2);
+      if (String(values[i][0] || '').trim().toLowerCase() === exactValue) matches.push(i + 2);
     }
   }
   if (matches.length !== 1) {
