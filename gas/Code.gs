@@ -258,7 +258,7 @@ function saveIndividualGrades_(payload) {
     const sheet = getRequiredSheet_(ss, CONFIG.SHEETS.INDIVIDUAL);
     requireHeaders_(sheet, CONFIG.INDIVIDUAL_HEADERS);
     const headerMap = getHeaderMap_(sheet);
-    const rowNumber = findSingleExactRow_(sheet, headerMap, 'Email', email);
+    const rowNumber = findOrCreateRow_(sheet, 'Email', email);
     const headers = Object.keys(headerMap).sort((a, b) => headerMap[a] - headerMap[b]);
     const rowValues = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
     const rowEmail = String(rowValues[headerMap.Email - 1] || '').trim();
