@@ -741,7 +741,7 @@ function computeRollupRows_() {
       const prof = numOrBlank_(ind.ProfessionalismScore);
       const extra = numOrZero_(ind.ExtraCreditScore);
       const individualTotal = sumNums_([effort, prof]);
-      const calculatedScore = blankIfIncomplete_([groupWork, outfit, metaphor, effort, prof], (groupTotal * 0.75) + (individualTotal * 0.25) + extra);
+      const calculatedScore = blankIfIncomplete_([groupWork, outfit, metaphor, effort, prof], groupTotal + individualTotal + extra);
       const manualOverride = numOrBlank_(ind.ManualScoreOverride);
       const finalScore = manualOverride !== '' ? manualOverride : calculatedScore;
       rows.push({
