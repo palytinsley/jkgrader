@@ -341,11 +341,10 @@ Thanks,
         Object.entries(g.studentPeerData||{}).forEach(([email,val])=>{if(val!==null)studentPeerData[email]=val;});
         staticGroups[g.groupKey]={peerResponses:g.peerResponses,studentPeerData,studentReflections};
       });
-      return {rubric:data.rubric||{},spreadsheetUrl:data.spreadsheetUrl||'',scriptUrl:data.scriptUrl||'',staticGroups};
+      return {spreadsheetUrl:data.spreadsheetUrl||'',scriptUrl:data.scriptUrl||'',staticGroups};
     }
     function applyStaticCache(data,cache){
       if(!cache)return data;
-      data.rubric=cache.rubric||{};
       data.spreadsheetUrl=cache.spreadsheetUrl||'';
       data.scriptUrl=cache.scriptUrl||'';
       (data.groups||[]).forEach(rehydrateGroupStatic);
