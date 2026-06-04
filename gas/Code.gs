@@ -233,7 +233,10 @@ function saveGroupGrades_(payload) {
     mergeRowValue_(rowValues, headerMap, 'GroupKey', groupKey);
     mergeRowValue_(rowValues, headerMap, 'Period', period);
     mergeRowValue_(rowValues, headerMap, 'Country', country);
-    ['GroupWorkScore', 'GroupWorkComment', 'OutfitQualityScore', 'OutfitQualityComment', 'MetaphorScore', 'MetaphorComment'].forEach(header => {
+    ['GroupWorkScore', 'OutfitQualityScore', 'MetaphorScore'].forEach(header => {
+      if (Object.prototype.hasOwnProperty.call(payload, header)) mergeRowValue_(rowValues, headerMap, header, roundHalf_(payload[header]));
+    });
+    ['GroupWorkComment', 'OutfitQualityComment', 'MetaphorComment'].forEach(header => {
       if (Object.prototype.hasOwnProperty.call(payload, header)) mergeRowValue_(rowValues, headerMap, header, payload[header]);
     });
     const savedAt = new Date().toISOString();
@@ -273,11 +276,13 @@ function saveIndividualGrades_(payload) {
       rowNumber,
       rowEmail);
     mergeRowValue_(rowValues, headerMap, 'Email', email);
-    ['StudentName', 'Period', 'Country', 'EffortScore', 'EffortComment', 'ProfessionalismScore',
-     'ProfessionalismComment', 'ShowNightRole', 'ExtraCreditScore', 'ExtraCreditNote',
-     'GroupWorkOverride', 'GroupWorkOverrideNote', 'OutfitQualityOverride', 'OutfitQualityOverrideNote',
-     'MetaphorOverride', 'MetaphorOverrideNote',
-     'ManualScoreOverride', 'ManualScoreOverrideNote',
+    ['EffortScore', 'ProfessionalismScore', 'ExtraCreditScore', 'GroupWorkOverride',
+     'OutfitQualityOverride', 'MetaphorOverride', 'ManualScoreOverride'].forEach(header => {
+      if (Object.prototype.hasOwnProperty.call(payload, header)) mergeRowValue_(rowValues, headerMap, header, roundHalf_(payload[header]));
+    });
+    ['StudentName', 'Period', 'Country', 'EffortComment', 'ProfessionalismComment',
+     'ShowNightRole', 'ExtraCreditNote', 'GroupWorkOverrideNote', 'OutfitQualityOverrideNote',
+     'MetaphorOverrideNote', 'ManualScoreOverrideNote',
      'EmailSent', 'EmailSentAt'].forEach(header => {
       if (Object.prototype.hasOwnProperty.call(payload, header)) mergeRowValue_(rowValues, headerMap, header, payload[header]);
     });
@@ -1182,6 +1187,11 @@ function numOrBlank_(value) {
   if (value === '' || value === null || value === undefined) return '';
   const num = Number(value);
   return Number.isFinite(num) ? num : '';
+}
+
+function roundHalf_(value) {
+  const n = numOrBlank_(value);
+  return n === '' ? '' : Math.round(n * 2) / 2;
 }
 
 function numOrZero_(value) {
