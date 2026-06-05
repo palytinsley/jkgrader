@@ -242,10 +242,11 @@
     </div>
   </div>
   <script>
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbyU0UhJ5bBfhyffEThZ4-43T8rMhf6gp_ExOiTuU8o8nBSq5F-6CTEnNl0UqWv-TFDvTw/exec';
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbzhM22oBJr6Gru33fEQd34nJ5sf4fuv4cKPtdZJ-A44jfLem_cNvU6kxTnAgScFfSyH9g/exec';
     const SCRIPT_ID = '1Wj32Xppq-IlyxQ2p--guCnTnxc3eva7ckX8DYT6NsvtVMYX4i62KWWcF';
     const STORAGE = { theme:'jkDressGraderTheme', sidebar:'jkDressGraderSidebarOpen', last:'jkDressGraderLastGroupKey' };
     const STATIC_CACHE_KEY = 'jkGraderStaticData';
+    const BUILD_INFO_CHECK_TIMEOUT_MS = 8000;
     const state = { groups:[], allGroups:[], rubric:{}, selectedGroupKey:'', selectedGroup:null, period:'All', tab:'dress', photoIndex:0, spreadsheetUrl:'', scriptUrl:'', rollup:[], mcSelected:new Set(), mcActive:'', schoologyPeriod:'All', schoologySort:'first', emailDraft:null, peerExpandedEmail:null, peerAccordionOpen:0 };
     const MS_DEFAULT_TEMPLATES = {
       showNight: {
@@ -298,6 +299,7 @@ Thanks,
     }
     document.addEventListener('DOMContentLoaded', init);
     function init(){
+      console.info('[JK Grader] Startup GAS_URL:', GAS_URL);
       ['summaryProgress','summaryCount','summaryPercent','groupJump','groupList','periodLabel','countryTitle','studentLine','groupStatusBadge','saveState','settingsBtn','settingsMenu','openSpreadsheetLink','messageCenterBtn','missingSumbissionsBtn','schoologyModeBtn','setupSheetsBtn','updateGradeRollupBtn','refreshPeerBtn','prevGroupBtn','nextGroupBtn','nextUngradedBtn','sidebarToggleBtn','errorBox','scoreBar','emptyState','dressTab','peopleTab','toast','lightbox','lightboxImg','lightboxClose','lightboxPrev','lightboxNext','lightboxLabel','emailModal','emailClose','emailCancel','emailTo','emailSignoff','emailTestMode','emailDryRun','emailWarning','emailPreview','emailSend','messageCenterModal','mcClose','mcSignoff','mcIncludeSent','mcShowIncomplete','mcDryRun','mcSelectEligible','mcSelectUnsent','mcClear','mcTest','mcSend','mcStatus','mcList','mcPreviewName','mcPreview','missingSubmissionsModal','msClose','msRecipientPane','msSelectAll','msClear','msLoadedAt','msRefresh','msRecipientCount','msRecipientList','msTemplatePane','msSubject','msBody','msSignoff','msDryRun','msTestSend','msSend','msStatus','msResults','msConfirmModal','msConfirmTitle','msConfirmBody','msConfirmCancel','msConfirmSend','schoologyModal','schoologyClose','schoologyList'].forEach(id=>els[id]=document.getElementById(id));
       (function() {
         const topbar = document.querySelector('.topbar');
@@ -308,7 +310,7 @@ Thanks,
         });
         ro.observe(topbar);
       })();
-      bindEvents(); updateThemeControls(); loadAppData();
+      bindEvents(); updateThemeControls(); checkBuildInfo(); loadAppData();
     }
     function bindEvents(){
       document.querySelectorAll('[data-period]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('[data-period]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.period=btn.dataset.period;state.groups=state.period==='All'?state.allGroups:state.allGroups.filter(g=>String(g.period)===state.period);renderShell(summarizeVisible());renderSelectedGroup();}));
@@ -335,6 +337,36 @@ Thanks,
     async function apiPost(payload){
       if(!GAS_URL) throw new Error('Set GAS_URL in index.html to the deployed Web App URL.');
       const res = await fetch(GAS_URL,{method:'POST',body:JSON.stringify(payload)}); const json = await res.json(); if(!json.ok) throw new Error(json.message || 'Request failed.'); return json;
+    }
+    async function checkBuildInfo(){
+      try{
+        const controller=new AbortController();
+        const timeout=setTimeout(()=>controller.abort(),BUILD_INFO_CHECK_TIMEOUT_MS);
+        const url=new URL(GAS_URL); url.searchParams.set('action','getBuildInfo');
+        const res=await fetch(url.toString(),{signal:controller.signal});
+        clearTimeout(timeout);
+        const json=await res.json();
+        if(!json.ok) throw new Error(json.message||'Build info request failed.');
+        console.info('[JK Grader] Server build info:',{
+          gasUrl:GAS_URL,
+          scriptId:json.scriptId||SCRIPT_ID,
+          spreadsheetId:json.spreadsheetId||'',
+          buildLabel:json.buildLabel||'',
+          emailTemplateVersion:json.emailTemplateVersion||''
+        });
+      }catch(err){
+        console.warn('[JK Grader] Build info check failed:',err&&err.message?err.message:err);
+      }
+    }
+    function logEmailTemplateDiagnostics(source,payload){
+      try{
+        console.info(`[JK Grader] ${source} diagnostics:`,{
+          gasUrl:GAS_URL,
+          emailTemplateVersion:payload&&payload.emailTemplateVersion?payload.emailTemplateVersion:'',
+          subject:payload&&payload.subject?payload.subject:'',
+          to:payload&&payload.to?payload.to:''
+        });
+      }catch(e){}
     }
     function extractStaticCache(data){
       const staticGroups={};
@@ -439,15 +471,15 @@ Thanks,
     function saveOverride(box,g,btn){const errEl=box.querySelector('.inline-error');errEl.textContent='';const key=box.dataset.overrideKey,email=box.dataset.email;const input=box.querySelector('[data-override-value]');const noteEl=box.querySelector('[data-override-note]');const value=input.value,note=noteEl.value.trim();const inherited=Number(input.max);if(value===''||!Number.isFinite(Number(value))){errEl.textContent='Enter an override score.';return;}if(Number(value)>inherited){errEl.textContent=`Override cannot exceed inherited group score of ${fmt(inherited)}.`;return;}if(!note){errEl.textContent='Note is required.';return;}clearError();const student=g.students.find(s=>s.email===email);const patch={studentEmail:email,[key+'Override']:value,[key+'OverrideNote']:note};const snapshot=applyOptimisticUpdate(g.groupKey,patch);apiPost({action:'saveIndividualGrades',email,StudentName:student.name,Period:g.period,Country:g.country,[key+'Override']:value,[key+'OverrideNote']:note}).then(res=>{replaceGroup(res.group);setSaveState('Saved');toast(`${student.preferredFirst||student.name} override saved.`);}).catch(err=>{rollbackGroup(snapshot);toast(`Save failed — changes reverted. ${err.message}`);showError(err.message);setSaveState('Error','error');});}
     function clearOverride(box,g){clearError();const key=box.dataset.overrideKey,email=box.dataset.email;const student=g.students.find(s=>s.email===email);const patch={studentEmail:email,[key+'Override']:'',[key+'OverrideNote']:''};const snapshot=applyOptimisticUpdate(g.groupKey,patch);apiPost({action:'saveIndividualGrades',email,StudentName:student.name,Period:g.period,Country:g.country,[key+'Override']:'',[key+'OverrideNote']:''}).then(res=>{replaceGroup(res.group);setSaveState('Saved');toast(`${student.preferredFirst||student.name} override cleared.`);}).catch(err=>{rollbackGroup(snapshot);toast(`Save failed — changes reverted. ${err.message}`);showError(err.message);setSaveState('Error','error');});}
     function replaceGroup(group){rehydrateGroupStatic(group,loadStaticCache());const idx=state.groups.findIndex(g=>g.groupKey===group.groupKey);if(idx>=0){const existing=state.groups[idx];if(group.showNightData===null)group.showNightData=existing.showNightData;if(!group.peerResponses||!group.peerResponses.length)group.peerResponses=existing.peerResponses;if(!group.studentPeerData||!Object.keys(group.studentPeerData).length)group.studentPeerData=existing.studentPeerData;state.groups[idx]=group;}state.selectedGroup=group;renderShell(summarizeVisible());renderSelectedGroup();}
-    async function openEmail(email){state.emailDraft={email,alreadySent:false};els.emailTo.textContent='Loading...';els.emailWarning.classList.add('hidden');els.emailPreview.srcdoc='<p style="font-family:sans-serif;padding:2rem;">Loading preview...</p>';els.emailModal.classList.remove('hidden');try{const res=await apiGet('getRubricEmailPreview',{email,signoff:els.emailSignoff.value});els.emailTo.textContent=res.to||email;els.emailPreview.srcdoc=res.html||res.htmlContent||'';state.emailDraft.alreadySent=!!res.emailAlreadySent;if(res.emailAlreadySent){els.emailWarning.textContent=`Already sent on ${res.emailSentAt || 'a previous date'}. Click Send again only if you intend to resend.`;els.emailWarning.classList.remove('hidden');}}catch(err){showError(err.message);closeEmail();}}
-    async function sendEmail(){if(!state.emailDraft)return;try{const already=state.emailDraft.alreadySent;if(already&&!confirm('This student already received an email. Send again?'))return;setSaveState('Saving','saving');const res=await apiPost({action:'sendRubricEmail',email:state.emailDraft.email,confirmed:true,force:already,dryRun:els.emailDryRun.checked,testMode:els.emailTestMode.checked,signoff:els.emailSignoff.value});toast(res.dryRun?'Dry run logged.':`Email sent to ${res.to}`);closeEmail();setSaveState('Saved');const groupKey=state.selectedGroup?state.selectedGroup.groupKey:null;if(groupKey){try{const gRes=await apiGet('getGroupDetails',{groupKey});replaceGroup(gRes.group);}catch(_){}}}catch(err){showError(err.message);}}
+    async function openEmail(email){state.emailDraft={email,alreadySent:false};els.emailTo.textContent='Loading...';els.emailWarning.classList.add('hidden');els.emailPreview.srcdoc='<p style="font-family:sans-serif;padding:2rem;">Loading preview...</p>';els.emailModal.classList.remove('hidden');try{const res=await apiGet('getRubricEmailPreview',{email,signoff:els.emailSignoff.value});logEmailTemplateDiagnostics('Individual preview',res);els.emailTo.textContent=res.to||email;els.emailPreview.srcdoc=res.html||res.htmlContent||'';state.emailDraft.alreadySent=!!res.emailAlreadySent;if(res.emailAlreadySent){els.emailWarning.textContent=`Already sent on ${res.emailSentAt || 'a previous date'}. Click Send again only if you intend to resend.`;els.emailWarning.classList.remove('hidden');}}catch(err){showError(err.message);closeEmail();}}
+    async function sendEmail(){if(!state.emailDraft)return;try{const already=state.emailDraft.alreadySent;if(already&&!confirm('This student already received an email. Send again?'))return;setSaveState('Saving','saving');const res=await apiPost({action:'sendRubricEmail',email:state.emailDraft.email,confirmed:true,force:already,dryRun:els.emailDryRun.checked,testMode:els.emailTestMode.checked,signoff:els.emailSignoff.value});logEmailTemplateDiagnostics('Individual send',res);toast(res.dryRun?'Dry run logged.':`Email sent to ${res.to}`);closeEmail();setSaveState('Saved');const groupKey=state.selectedGroup?state.selectedGroup.groupKey:null;if(groupKey){try{const gRes=await apiGet('getGroupDetails',{groupKey});replaceGroup(gRes.group);}catch(_){}}}catch(err){showError(err.message);}}
     async function openMessageCenter(){els.messageCenterModal.classList.remove('hidden');els.mcStatus.textContent='Loading...';try{const res=await apiGet('getGradeRollup');state.rollup=res.rows||[];renderMessageCenter();}catch(err){showError(err.message);}}
     function renderMessageCenter(){const rows=filteredRollup();els.mcStatus.textContent=`${state.mcSelected.size} selected`;els.mcList.innerHTML=rows.map(r=>`<div class="mc-row ${state.mcActive===r.Email?'active':''}"><input type="checkbox" data-mc-check="${escAttr(r.Email)}" ${state.mcSelected.has(r.Email)?'checked':''}><button class="text-btn" data-mc-preview="${escAttr(r.Email)}" type="button" style="justify-content:flex-start"><span>${esc(r.StudentName)}<br><small class="muted">${esc(r.Country)} · P${esc(r.Period)}</small></span></button><span>${fmt(r.FinalScore)}/100</span></div>`).join('');els.mcList.querySelectorAll('[data-mc-check]').forEach(ch=>ch.addEventListener('change',()=>{ch.checked?state.mcSelected.add(ch.dataset.mcCheck):state.mcSelected.delete(ch.dataset.mcCheck);renderMessageCenter();}));els.mcList.querySelectorAll('[data-mc-preview]').forEach(btn=>btn.addEventListener('click',()=>previewMessage(btn.dataset.mcPreview)));}
     function filteredRollup(){return state.rollup.filter(r=>(els.mcShowIncomplete.checked||r.FinalScore!=='')&&(els.mcIncludeSent.checked||!truthy(r.EmailSent)));}
-    async function previewMessage(email){state.mcActive=email;renderMessageCenter();els.mcPreviewName.textContent='Loading preview...';try{const res=await apiGet('getRubricEmailPreview',{email,signoff:els.mcSignoff.value});els.mcPreviewName.textContent=res.subject;els.mcPreview.srcdoc=res.html||res.htmlContent||'';}catch(err){showError(err.message);}}
+    async function previewMessage(email){state.mcActive=email;renderMessageCenter();els.mcPreviewName.textContent='Loading preview...';try{const res=await apiGet('getRubricEmailPreview',{email,signoff:els.mcSignoff.value});logEmailTemplateDiagnostics('Message Center preview',res);els.mcPreviewName.textContent=res.subject;els.mcPreview.srcdoc=res.html||res.htmlContent||'';}catch(err){showError(err.message);}}
     function selectMessages(mode){state.mcSelected.clear();state.rollup.forEach(r=>{const complete=r.FinalScore!=='';if(mode==='eligible'&&complete)state.mcSelected.add(r.Email);if(mode==='unsent'&&complete&&!truthy(r.EmailSent))state.mcSelected.add(r.Email);});renderMessageCenter();}
-    async function sendMessageTest(){const email=state.mcActive||[...state.mcSelected][0]||(state.rollup.find(r=>r.FinalScore!=='')||{}).Email;if(!email)return toast('No completed student available.');try{const res=await apiPost({action:'sendRubricEmail',email,confirmed:true,dryRun:els.mcDryRun.checked,testMode:true,signoff:els.mcSignoff.value});toast(res.dryRun?'Test dry run logged.':`Test sent to ${res.to}`);}catch(err){showError(err.message);}}
-    async function sendMessageBatch(){const emails=[...state.mcSelected];if(!emails.length)return toast('Select at least one student.');if(!confirm(`Batch send ${emails.length} email(s)? Dry run: ${els.mcDryRun.checked ? 'yes' : 'no'}.`))return;try{const res=await apiPost({action:'batchSendEmails',emails,confirmed:true,force:els.mcIncludeSent.checked,dryRun:els.mcDryRun.checked,testMode:false,signoff:els.mcSignoff.value});toast(`Batch complete: ${res.sentCount} processed.`);await openMessageCenter();}catch(err){showError(err.message);}}
+    async function sendMessageTest(){const email=state.mcActive||[...state.mcSelected][0]||(state.rollup.find(r=>r.FinalScore!=='')||{}).Email;if(!email)return toast('No completed student available.');try{const res=await apiPost({action:'sendRubricEmail',email,confirmed:true,dryRun:els.mcDryRun.checked,testMode:true,signoff:els.mcSignoff.value});logEmailTemplateDiagnostics('Message Center test send',res);toast(res.dryRun?'Test dry run logged.':`Test sent to ${res.to}`);}catch(err){showError(err.message);}}
+    async function sendMessageBatch(){const emails=[...state.mcSelected];if(!emails.length)return toast('Select at least one student.');if(!confirm(`Batch send ${emails.length} email(s)? Dry run: ${els.mcDryRun.checked ? 'yes' : 'no'}.`))return;try{const res=await apiPost({action:'batchSendEmails',emails,confirmed:true,force:els.mcIncludeSent.checked,dryRun:els.mcDryRun.checked,testMode:false,signoff:els.mcSignoff.value});logEmailTemplateDiagnostics('Message Center batch send',res);toast(`Batch complete: ${res.sentCount} processed.`);await openMessageCenter();}catch(err){showError(err.message);}}
     async function openMissingSubmissions(){els.settingsMenu.classList.add('hidden');loadMissingTemplates();msState.tab='showNight';msState.selected.clear();msState.lastResults=null;els.msResults.classList.add('hidden');els.missingSubmissionsModal.classList.remove('hidden');setMissingStatus('Loading missing submissions...');renderMissingTabs();renderMissingTemplate();try{const res=await apiGet('getMissingData');msState.data=res;msState.loadedAt=new Date().toISOString();renderMissingSubmissions();}catch(err){setMissingStatus(err.message,true);}}
     function closeMissingSubmissions(){closeMissingConfirm();msState.lastResults=null;els.msResults.classList.add('hidden');els.missingSubmissionsModal.classList.add('hidden');}
     function switchMissingTab(tab){msState.lastResults=null;els.msResults.classList.add('hidden');if(tab==='reflection'){msState.tab=tab;msState.selected.clear();renderMissingSubmissions();return;}if(tab!=='showNight'&&tab!=='peerGrade')return;msState.tab=tab;msState.selected.clear();renderMissingSubmissions();}

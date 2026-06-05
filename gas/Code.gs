@@ -93,6 +93,7 @@ const CONFIG = {
     TTL_SECONDS: 3600
   }
 };
+const EMAIL_TEMPLATE_VERSION = 'card-email-v48';
 
 function doGet(e) {
   try {
@@ -103,11 +104,13 @@ function doGet(e) {
     else if (action === 'getRubricConfig') payload = { ok: true, rubric: getRubricConfig_() };
     else if (action === 'getGradeRollup') payload = getGradeRollup_();
     else if (action === 'getRubricEmailPreview') payload = getRubricEmailPreview_(e.parameter || {});
+    else if (action === 'getBuildInfo') payload = getBuildInfo_();
     else if (action === 'getMissingData') payload = getMissingData_();
     else if (action === 'getNotificationLog') payload = getNotificationLog_();
+    else if (action === 'bustCache') payload = bustCache_();
     else if (action === 'debugPeerMatch') payload = debugPeerMatch_(e.parameter || {});
     else if (action === 'setupSheets') payload = setupSheets_();
-    else payload = { ok: true, message: 'JK Show and Dress Grader API', actions: ['getAppData', 'getGroupDetails', 'getRubricConfig', 'getGradeRollup', 'getRubricEmailPreview', 'getMissingData', 'getNotificationLog', 'debugPeerMatch', 'setupSheets'] };
+    else payload = { ok: true, message: 'JK Show and Dress Grader API', actions: ['getAppData', 'getGroupDetails', 'getRubricConfig', 'getGradeRollup', 'getRubricEmailPreview', 'getBuildInfo', 'getMissingData', 'getNotificationLog', 'bustCache', 'debugPeerMatch', 'setupSheets'] };
     return jsonResponse_(payload);
   } catch (err) {
     logError_('doGet', err, e && e.parameter);
@@ -210,6 +213,7 @@ function getRubricEmailPreview_(params) {
     subject: buildEmailSubject_(context.student),
     html,
     htmlContent: html,
+    emailTemplateVersion: EMAIL_TEMPLATE_VERSION,
     emailAlreadySent: asBool_(context.student.EmailSent),
     emailSentAt: context.student.EmailSentAt || ''
   };
@@ -317,7 +321,17 @@ function sendRubricEmail_(payload) {
     if (!payload.testMode) markEmailSent_(context.student.email);
   }
   Logger.log('sendRubricEmail dryRun=%s testMode=%s to=%s student=%s', !!payload.dryRun, !!payload.testMode, to, context.student.name);
-  return { ok: true, dryRun: !!payload.dryRun, testMode: !!payload.testMode, to, sentAt: new Date().toISOString() };
+  return {
+    ok: true,
+    dryRun: !!payload.dryRun,
+    testMode: !!payload.testMode,
+    to,
+    sentAt: new Date().toISOString(),
+    subject: buildEmailSubject_(context.student),
+    html,
+    htmlContent: html,
+    emailTemplateVersion: EMAIL_TEMPLATE_VERSION
+  };
 }
 
 function batchSendEmails_(payload) {
@@ -340,7 +354,12 @@ function batchSendEmails_(payload) {
       results.push({ email, ok: false, message: err.message });
     }
   });
-  return { ok: true, results, sentCount: results.filter(item => item.ok).length };
+  return {
+    ok: true,
+    results,
+    sentCount: results.filter(item => item.ok).length,
+    emailTemplateVersion: EMAIL_TEMPLATE_VERSION
+  };
 }
 
 function getMissingData_() {
@@ -542,6 +561,27 @@ function setupSheets_() {
   cache.remove(CONFIG.CACHE.RUBRIC_CONFIG);
   cache.remove(CONFIG.CACHE.ROSTER);
   return { ok: true, results };
+}
+
+function getBuildInfo_() {
+  return {
+    ok: true,
+    scriptId: getScriptId_(),
+    spreadsheetId: CONFIG.SPREADSHEET_ID,
+    buildLabel: getBuildLabel_(),
+    emailTemplateVersion: EMAIL_TEMPLATE_VERSION
+  };
+}
+
+function bustCache_() {
+  const cache = CacheService.getScriptCache();
+  cache.remove(CONFIG.CACHE.RUBRIC_CONFIG);
+  cache.remove(CONFIG.CACHE.ROSTER);
+  return {
+    ok: true,
+    clearedKeys: [CONFIG.CACHE.RUBRIC_CONFIG, CONFIG.CACHE.ROSTER],
+    emailTemplateVersion: EMAIL_TEMPLATE_VERSION
+  };
 }
 
 function readWorkbook_() {
@@ -799,33 +839,73 @@ function getStudentEmailContext_(email) {
 function buildEmailHtml_(student, groupGrades, rubric, signoff) {
   const e = escapeHtmlEmail_;
   const pct = student.FinalPercent === '' ? '' : Math.round(Number(student.FinalPercent) * 100);
-  function scoreLine(label, score, max, note) {
-    return `<tr><td style="padding:12px 0;border-bottom:1px solid #e5e7eb;"><strong>${e(label)}</strong>${note ? `<p style="margin:6px 0 0;color:#92400e;">Override note: ${e(note)}</p>` : ''}</td><td align="right" style="padding:12px 0;border-bottom:1px solid #e5e7eb;font-weight:800;">${e(displayScore_(score))}/${e(max)}</td></tr>`;
+  const groupMax = Number(rubric['Group Work'] ? rubric['Group Work'].maxPoints : 0) +
+    Number(rubric['Outfit Quality'] ? rubric['Outfit Quality'].maxPoints : 0) +
+    Number(rubric.Metaphor ? rubric.Metaphor.maxPoints : 0);
+  const individualMax = Number(rubric['Effort and Initiative'] ? rubric['Effort and Initiative'].maxPoints : 0) +
+    Number(rubric.Professionalism ? rubric.Professionalism.maxPoints : 0);
+  function trimmed(value) {
+    return String(value === null || value === undefined ? '' : value).trim();
   }
-  const teacherNotes = [
-    groupGrades.GroupWorkComment,
-    groupGrades.OutfitQualityComment,
-    groupGrades.MetaphorComment,
-    student.EffortComment,
-    student.ProfessionalismComment,
-    student.ExtraCreditNote
-  ].filter(Boolean).map(escapeHtmlEmail_).join('<br><br>');
+  function renderCriteria(criteria) {
+    if (!criteria || !criteria.length) return '';
+    return `<div style="margin-top:14px;">${criteria.map(item => `<div style="margin-top:8px;color:#4d5d73;font-size:13px;line-height:1.6;">&#8226; <strong>${e(item && item.label)}</strong> &#8212; ${e(item && item.text)}</div>`).join('')}</div>`;
+  }
+  function renderCommentBlock(label, value, accentColor, backgroundColor, textColor) {
+    const text = trimmed(value);
+    if (!text) return '';
+    return `<div style="margin-top:14px;border-left:4px solid ${accentColor};background:${backgroundColor};padding:12px 14px;"><div style="color:${textColor};font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;">${e(label)}</div><div style="margin-top:6px;color:${textColor};font-size:13px;line-height:1.6;white-space:pre-line;">${e(text)}</div></div>`;
+  }
+  function renderCategoryCard(label, score, max, categoryRubric, comment, overrideNote) {
+    return `<div style="margin-top:14px;border:1px solid #e5e7eb;border-radius:16px;background:#ffffff;padding:18px 18px 16px;">
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td style="font-size:17px;font-weight:800;color:#203044;">${e(label)}</td>
+          <td align="right" style="font-size:17px;font-weight:800;color:#4a40e0;">${e(displayScore_(score))}/${e(displayScore_(max))}</td>
+        </tr>
+      </table>
+      ${renderCriteria(categoryRubric && categoryRubric.criteria)}
+      ${renderCommentBlock('Teacher Comment', comment, '#f59e0b', '#fffbeb', '#92400e')}
+      ${renderCommentBlock('Override Note', overrideNote, '#fb923c', '#fff7ed', '#9a3412')}
+    </div>`;
+  }
+  function renderSectionLabel(label) {
+    return `<div style="margin-top:28px;padding-top:4px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;">${e(label)}</div>`;
+  }
+  function renderSubtotalRow(label, score, max) {
+    return `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:14px;">
+      <tr>
+        <td style="padding:8px 0;font-size:15px;font-weight:800;color:#203044;">${e(label)}</td>
+        <td align="right" style="padding:8px 0;font-size:15px;font-weight:800;color:#203044;">${e(displayScore_(score))}/${e(displayScore_(max))}</td>
+      </tr>
+    </table>`;
+  }
+  function renderPlainRow(label, score, max, note) {
+    const noteText = trimmed(note);
+    return `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:10px;">
+      <tr>
+        <td style="padding:8px 0;font-size:15px;font-weight:800;color:#203044;">${e(label)}</td>
+        <td align="right" style="padding:8px 0;font-size:15px;font-weight:800;color:#203044;">${e(displayScore_(score))}/${e(displayScore_(max))}</td>
+      </tr>
+      ${noteText ? `<tr><td colspan="2" style="padding:0 0 2px;color:#92400e;font-size:13px;line-height:1.6;white-space:pre-line;">${e(noteText)}</td></tr>` : ''}
+    </table>`;
+  }
   return `<!doctype html><html><body style="margin:0;background:#f4f6ff;font-family:Arial,Helvetica,sans-serif;color:#203044;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6ff;padding:28px 12px;"><tr><td align="center">
   <table width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:18px;overflow:hidden;">
   <tr><td style="background:#4a40e0;color:#ffffff;padding:28px;"><p style="margin:0 0 6px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;">Junk Kouture Feedback</p><h1 style="margin:0;font-size:26px;">${e(student.name)}</h1><p style="margin:8px 0 0;">${e(student.country)} · Period ${e(student.period)}</p></td></tr>
-  <tr><td style="padding:24px 28px;"><table width="100%" cellpadding="0" cellspacing="0">
-  ${scoreLine('Group Work', student.GroupWorkFinal, rubric['Group Work'] ? rubric['Group Work'].maxPoints : 30, student.GroupWorkOverrideNote)}
-  ${scoreLine('Outfit Quality', student.OutfitQualityFinal, rubric['Outfit Quality'] ? rubric['Outfit Quality'].maxPoints : 30, student.OutfitQualityOverrideNote)}
-  ${scoreLine('Metaphor', student.MetaphorFinal, rubric.Metaphor ? rubric.Metaphor.maxPoints : 15, student.MetaphorOverrideNote)}
-  ${scoreLine('Group subtotal', student.GroupTotal, 75, '')}
-  ${scoreLine('Effort and Initiative', student.EffortScore, rubric['Effort and Initiative'] ? rubric['Effort and Initiative'].maxPoints : 10, '')}
-  ${scoreLine('Professionalism', student.ProfessionalismScore, rubric.Professionalism ? rubric.Professionalism.maxPoints : 15, '')}
-  ${scoreLine('Extra Credit', student.ExtraCreditScore, rubric['Extra Credit'] ? rubric['Extra Credit'].maxPoints : 5, '')}
-  ${scoreLine('Individual subtotal', student.IndividualTotal, 25, '')}
-  </table>
+  <tr><td style="padding:24px 28px;">
+  ${renderSectionLabel('Group Grades')}
+  ${renderCategoryCard('Group Work', student.GroupWorkFinal, rubric['Group Work'] ? rubric['Group Work'].maxPoints : 0, rubric['Group Work'], groupGrades.GroupWorkComment, student.GroupWorkOverrideNote)}
+  ${renderCategoryCard('Outfit Quality', student.OutfitQualityFinal, rubric['Outfit Quality'] ? rubric['Outfit Quality'].maxPoints : 0, rubric['Outfit Quality'], groupGrades.OutfitQualityComment, student.OutfitQualityOverrideNote)}
+  ${renderCategoryCard('Metaphor', student.MetaphorFinal, rubric.Metaphor ? rubric.Metaphor.maxPoints : 0, rubric.Metaphor, groupGrades.MetaphorComment, student.MetaphorOverrideNote)}
+  ${renderSubtotalRow('Group Subtotal', student.GroupTotal, groupMax)}
+  ${renderSectionLabel('Individual Grades')}
+  ${renderCategoryCard('Effort and Initiative', student.EffortScore, rubric['Effort and Initiative'] ? rubric['Effort and Initiative'].maxPoints : 0, rubric['Effort and Initiative'], student.EffortComment, '')}
+  ${renderCategoryCard('Professionalism', student.ProfessionalismScore, rubric.Professionalism ? rubric.Professionalism.maxPoints : 0, rubric.Professionalism, student.ProfessionalismComment, '')}
+  ${trimmed(student.ExtraCreditScore) ? renderPlainRow('Extra Credit', student.ExtraCreditScore, rubric['Extra Credit'] ? rubric['Extra Credit'].maxPoints : 0, student.ExtraCreditNote) : ''}
+  ${renderSubtotalRow('Individual Subtotal', student.IndividualTotal, individualMax)}
   <div style="margin-top:22px;background:#f4f6ff;border-radius:12px;padding:18px;"><p style="margin:0;color:#4d5d73;font-size:12px;font-weight:800;text-transform:uppercase;">Final Score</p><p style="margin:6px 0 0;font-size:34px;font-weight:800;color:#4a40e0;">${e(displayScore_(student.FinalScore))}/100 ${pct !== '' ? `<span style="font-size:18px;color:#4d5d73;">(${e(pct)}%)</span>` : ''}</p></div>
-  ${teacherNotes ? `<div style="margin-top:20px;border-left:4px solid #f59e0b;background:#fffbeb;padding:14px 18px;"><strong>Teacher Comment</strong><p style="white-space:pre-line;line-height:1.55;">${teacherNotes}</p></div>` : ''}
   <p style="margin:24px 0 0;white-space:pre-line;">${e(signoff || CONFIG.DEFAULT_SIGNOFF)}</p>
   </td></tr></table></td></tr></table></body></html>`;
 }
@@ -855,6 +935,22 @@ function jsonResponse_(payload) {
 
 function getSpreadsheet_() {
   return SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+}
+
+function getScriptId_() {
+  try {
+    return ScriptApp.getScriptId();
+  } catch (err) {
+    return '1Wj32Xppq-IlyxQ2p--guCnTnxc3eva7ckX8DYT6NsvtVMYX4i62KWWcF';
+  }
+}
+
+function getBuildLabel_() {
+  try {
+    return PropertiesService.getScriptProperties().getProperty('BUILD_LABEL') || '';
+  } catch (err) {
+    return '';
+  }
 }
 
 function getRequiredSheet_(ss, name) {
