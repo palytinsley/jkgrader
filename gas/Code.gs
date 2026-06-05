@@ -818,7 +818,7 @@ function buildEmailHtml_(student, groupGrades, rubric, signoff) {
   ${scoreLine('Group Work', student.GroupWorkFinal, rubric['Group Work'] ? rubric['Group Work'].maxPoints : 30, student.GroupWorkOverrideNote)}
   ${scoreLine('Outfit Quality', student.OutfitQualityFinal, rubric['Outfit Quality'] ? rubric['Outfit Quality'].maxPoints : 30, student.OutfitQualityOverrideNote)}
   ${scoreLine('Metaphor', student.MetaphorFinal, rubric.Metaphor ? rubric.Metaphor.maxPoints : 15, student.MetaphorOverrideNote)}
-  ${scoreLine('Group subtotal', student.GroupTotal, 75, '')}
+  ${scoreLine('Group subtotal', student.GroupTotal, 55, '')}
   ${scoreLine('Effort and Initiative', student.EffortScore, rubric['Effort and Initiative'] ? rubric['Effort and Initiative'].maxPoints : 10, '')}
   ${scoreLine('Professionalism', student.ProfessionalismScore, rubric.Professionalism ? rubric.Professionalism.maxPoints : 15, '')}
   ${scoreLine('Extra Credit', student.ExtraCreditScore, rubric['Extra Credit'] ? rubric['Extra Credit'].maxPoints : 5, '')}
